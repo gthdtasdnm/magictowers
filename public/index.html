@@ -78,7 +78,7 @@
 <section class="screen" id="s-game">
   <header class="hud">
     <div class="hud-l">
-      <div class="round-pill">Runde <b id="hud-round">1</b><i>/<span id="hud-rounds">10</span></i></div>
+      <div class="round-pill">Runde <b id="hud-round">1</b><i>/<span id="hud-rounds">10</span></i><em id="hud-roundmult">×1.0</em></div>
       <div class="score-box">
         <span class="lbl">Punkte</span>
         <b id="hud-score">0</b>
@@ -91,7 +91,7 @@
       </div>
     </div>
     <div class="timer-wrap">
-      <div class="timer" id="hud-timer">75</div>
+      <div class="timer" id="hud-timer">90</div>
       <div class="timerbar"><i id="hud-timerbar"></i></div>
     </div>
     <div class="hud-r" id="rivals"></div>
@@ -203,6 +203,7 @@
       <li>Vor dir liegen <b>drei Pyramiden</b>. Die unterste Reihe ist offen.</li>
       <li>In der <b>Ablage</b> liegt eine Karte. Nimm vom Feld jede offene Karte, die <b>genau eins höher oder tiefer</b> ist. Ass zählt in beide Richtungen (K–A–2).</li>
       <li>Nichts passt? <b>Nachziehen</b> (Leertaste). Das killt aber deinen Streak.</li>
+      <li>Danebengegriffen? Eine offene Karte anzuklicken, die <b>nicht passt</b>, kostet <b>20.000</b> – und jeder weitere Fehlgriff in Folge kostet mehr (bis zum Fünffachen). Verdeckte Karten sind gratis, blind durchklicken lohnt sich also nicht.</li>
       <li>Eine Karte bringt <b>5.000 Punkte</b> – multipliziert mit der ganzen Kette:
         <b>Streak</b> (bis ×10) × <b>Bonusleiste</b> (bis ×3) × <b>Türme</b> (bis ×8).
         Läuft alles zusammen, sind das <b>1,2 Mio. für eine einzige Karte</b>.</li>
@@ -215,7 +216,7 @@
       <li>Ab Runde 3 können die hinteren Karten <b>verdeckt</b> liegen – sie drehen sich um, sobald beide Karten davor weg sind. Das gilt für alle am Tisch gleich.</li>
       <li>Board leer oder nichts mehr möglich? Dann bist du <b>durch</b>.</li>
       <li>🎲 Danach kommt die <b>Risikoleiter</b>: Setz die Hälfte deiner Punkte, 50/50 – gewonnen heißt verdoppelt, verloren heißt weg. Bis zu <b>drei Sprossen</b>, du kannst jederzeit aufhören.</li>
-      <li><b>75 Sekunden</b> pro Runde. Alle spielen exakt dasselbe Blatt.</li>
+      <li>Die Runden werden <b>immer kürzer</b>: von 90 Sekunden herunter auf 25. Dafür zählt jede Runde <b>mehr</b> – in der letzten gibt es alles ×3,6. Alle spielen exakt dasselbe Blatt.</li>
     </ol>
     <button class="btn primary" id="btn-rules-close">Alles klar</button>
   </div>

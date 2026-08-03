@@ -334,13 +334,13 @@ function startRound(room) {
   room.phase = 'countdown';
   room.seed = `${room.code}-${room.round}-${Math.random().toString(36).slice(2, 10)}`;
   room.startsAt = Date.now() + COUNTDOWN_MS;
-  room.endsAt = room.startsAt + E.ROUND_MS;
+  room.endsAt = room.startsAt + E.roundMs(room.round, room.totalRounds);
   room.riskAt = 0;
 
   for (const p of room.players) {
     p.ready = false;
     // Alle spielen dasselbe Blatt – gleiche Chancen, direkt vergleichbar.
-    p.st = E.createRound(room.seed, room.round);
+    p.st = E.createRound(room.seed, room.round, room.totalRounds);
   }
 
   syncRoom(room);
@@ -352,7 +352,10 @@ function startRound(room) {
   }, COUNTDOWN_MS));
 
   room.timers.push(setInterval(() => pushLive(room), TICK_MS));
-  room.timers.push(setTimeout(() => endRound(room), COUNTDOWN_MS + E.ROUND_MS + GRACE_MS));
+  room.timers.push(setTimeout(
+    () => endRound(room),
+    COUNTDOWN_MS + E.roundMs(room.round, room.totalRounds) + GRACE_MS,
+  ));
   pushLobby();
 }
 
@@ -422,7 +425,7 @@ function endRound(room, aborted = false) {
   clearTimers(room);
 
   const results = room.players.map((p) => {
-    const s = p.st ? E.publicStats(p.st) : { score: 0, bestStreak: 0, clears: 0, golds: 0, best: 0, riskWon: 0, riskLost: 0 };
+    const s = p.st ? E.publicStats(p.st) : { score: 0, bestStreak: 0, clears: 0, golds: 0, best: 0, misses: 0, riskWon: 0, riskLost: 0 };
     p.rounds.push(s.score);
     p.total += s.score;
     p.bestStreak = Math.max(p.bestStreak, s.bestStreak);
@@ -433,7 +436,8 @@ function endRound(room, aborted = false) {
     return {
       id: p.id, name: p.name, online: p.online,
       score: s.score, streak: s.bestStreak, clears: s.clears, total: p.total,
-      golds: s.golds, best: s.best, riskWon: s.riskWon, riskLost: s.riskLost,
+      golds: s.golds, best: s.best, misses: s.misses,
+      riskWon: s.riskWon, riskLost: s.riskLost,
     };
   }).sort((a, b) => b.score - a.score);
 
@@ -477,7 +481,11 @@ export function move(client, msg) {
   const ok = Number.isFinite(wanted) && wanted > now - TIME_SLACK_MS && wanted < now + 500;
   const t = ok ? wanted : now;
 
-  const ev = msg.a === 'draw' ? E.draw(p.st, t) : E.play(p.st, msg.i | 0, t);
+  const ev = msg.a === 'draw'
+    ? E.draw(p.st, t)
+    : msg.a === 'miss'
+    ? E.miss(p.st, msg.i | 0, t)
+    : E.play(p.st, msg.i | 0, t);
   if (!ev || !ok) {
     // Client und Server sind auseinandergelaufen – autoritativen Stand schicken.
     send(client, 'resync', { state: E.snapshot(p.st), seq: msg.seq });

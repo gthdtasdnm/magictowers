@@ -74,9 +74,31 @@ Punkte = 5.000 × Streak (bis ×10) × Bonusleiste (bis ×3) × Türme (bis ×8)
 | Streak 5 / 10 | 2. bzw. 3. Ablagekarte offen |
 | Turmspitze abgeräumt | +500.000, und der Turm-Multiplikator **verdoppelt** sich (×1 → ×2 → ×4 → ×8) |
 | Board komplett leer | +2.000.000 und +150.000 pro übriger Stapelkarte |
+| **Fehlgriff** | −20.000, und jeder weitere in Folge kostet mehr (bis ×5) |
 
 Eine mittelmäßige Runde landet bei rund **2 Millionen**, eine richtig gute bei
 **10 Millionen und mehr** – und die Risikoleiter kann das noch mal verdreifachen.
+
+**Fehlgriffe.** Eine offene Karte anzuklicken, die nirgends passt, kostet 20.000 – und
+jeder weitere Fehlgriff in Folge kostet ein Vielfaches davon, gedeckelt beim Fünffachen.
+Ein sauberer Zug setzt die Fehlserie zurück. Verdeckte und schon abgeräumte Karten kosten
+nichts; blind durchs Feld klicken soll sich nicht lohnen, versehentlich danebentippen
+aber auch nicht bestraft werden. Unter null geht der Punktestand nie.
+
+**Rundenlängen.** Die Runden werden immer kürzer – von 90 Sekunden herunter auf 25, linear
+über die gewählte Rundenzahl verteilt. Damit späte Runden dadurch nicht weniger wert sind,
+zählt jede Runde einen **Rundenmultiplikator**, der exakt dem Zeitverhältnis entspricht
+(`90 s / Rundenlänge`) und auf *alle* Punkte der Runde wirkt, Abzüge eingeschlossen:
+
+| Runden | Verlauf |
+|---|---|
+| 3 | 90 s ×1,0 · 58 s ×1,6 · 25 s ×3,6 |
+| 5 | 90 s ×1,0 · 74 s ×1,2 · 58 s ×1,6 · 41 s ×2,2 · 25 s ×3,6 |
+| 10 | 90 s ×1,0 · 83 s ×1,1 · … · 32 s ×2,8 · 25 s ×3,6 |
+
+Wer von der Uhr gebremst wird, kommt damit rechnerisch auf dasselbe heraus. Wer das Board
+ohnehin vor Ablauf leerräumt, verdient in den späten Runden deutlich mehr – die Partie
+entscheidet sich also am Ende.
 
 **Risikoleiter.** Sobald du durch bist, steht die Hälfte deiner Rundenpunkte zur
 Wahl: 50/50, gewonnen heißt verdoppelt, verloren heißt weg. Bis zu drei Sprossen,
@@ -88,7 +110,7 @@ exakt neutral, die Varianz ist es nicht.
 wie wenn du das Board leergeräumt hast. Es wird nicht neu ausgeteilt; du siehst deinen
 Stand, darfst an die Risikoleiter und wartest, bis auch die anderen fertig sind. Sobald
 alle durch sind, bleiben noch 10 Sekunden fürs Risiko, dann kommt die Auswertung –
-spätestens nach **75 Sekunden**.
+spätestens wenn die Rundenzeit abgelaufen ist.
 
 **Alle Spieler bekommen exakt dasselbe Blatt** – es entscheidet also nur, wer schneller
 und cleverer räumt. Sobald alle „Bereit" drücken, geht es weiter. Nach der letzten
@@ -270,7 +292,8 @@ Danach: `https://inf-zeus.de/magictowers/` – und `?tisch=2` führt direkt an T
 Alles Wichtige steht oben in `shared/engine.js`:
 
 ```js
-export const ROUND_MS = 75_000;     // Rundenlänge
+export const ROUND_MS = 90_000;     // erste Runde
+export const ROUND_MIN_MS = 25_000; // letzte Runde
 export const ROUNDS = 10;           // Standard-Rundenzahl
 export const DECK_SIZE = 16;        // Nachziehstapel
 export const MAX_SLOTS = 3;         // so viele Ablagekarten maximal

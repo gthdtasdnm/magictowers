@@ -175,8 +175,12 @@ net.on('error', ({ msg }) => toast(msg));
 // ─────────────────────────────────────────────────────────── Runde
 
 net.on('roundStart', (m) => {
-  round = { startsAt: m.startsAt, endsAt: m.endsAt, no: m.round, total: m.totalRounds, running: true };
-  st = m.resume && m.state ? E.restore(m.state) : E.createRound(m.seed, m.round);
+  round = {
+    startsAt: m.startsAt, endsAt: m.endsAt, no: m.round, total: m.totalRounds,
+    ms: m.endsAt - m.startsAt,   // jede Runde ist kürzer als die davor
+    running: true,
+  };
+  st = m.resume && m.state ? E.restore(m.state) : E.createRound(m.seed, m.round, m.totalRounds);
   seq = 0;
   live = [];
   hideDone();
@@ -184,6 +188,8 @@ net.on('roundStart', (m) => {
   B.render(st);
   $('#hud-round').textContent = m.round;
   $('#hud-rounds').textContent = m.totalRounds;
+  $('#hud-roundmult').textContent = `×${st.roundMult.toFixed(1)}`;
+  $('#hud-roundmult').classList.toggle('on', st.roundMult > 1);
   renderRivals();
   show('s-game');
   if (!m.resume) startCountdown();
@@ -213,7 +219,7 @@ function tickLoop() {
       el.style.animation = '';
       if (n <= 3) sfx.tick(n === 0 ? 0 : n);
     }
-    $('#hud-timer').textContent = Math.ceil(E.ROUND_MS / 1000);
+    $('#hud-timer').textContent = Math.ceil(round.ms / 1000);
     $('#hud-timerbar').style.width = '100%';
   } else {
     if ($('#countdown').classList.contains('on')) { $('#countdown').classList.remove('on'); sfx.go(); }
@@ -225,7 +231,7 @@ function tickLoop() {
       if (secs <= 10 && secs > 0) sfx.warn();
     }
     timer.classList.toggle('warn', secs <= 10);
-    const pct = (left / E.ROUND_MS) * 100;
+    const pct = (left / round.ms) * 100;
     $('#hud-timerbar').style.width = `${pct}%`;
     $('#hud-timerbar').classList.toggle('warn', pct < 25);
     if (left <= 0) round.running = false;
@@ -246,7 +252,13 @@ const playable = () => st && !st.over && round.running
 function tryPlay(i) {
   if (!playable()) return;
   if (E.matchingSlot(st, i) < 0) {
-    if (!st.taken[i]) { sfx.bad(); B.shake(); }
+    // Offene Karte, die nirgends passt: das kostet Punkte.
+    const ts = net.now();
+    const ev = E.miss(st, i, ts);
+    if (ev) {
+      net.send('move', { a: 'miss', i, ts, seq: ++seq });
+      afterMove(ev);
+    } else if (!st.taken[i]) { sfx.bad(); B.shake(); }
     return;
   }
   const ts = net.now();

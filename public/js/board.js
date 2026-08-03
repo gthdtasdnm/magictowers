@@ -109,10 +109,11 @@ export function render(st) {
   elSlotHint.textContent = st.unlocked === 1 ? 'Ablage' : `${st.unlocked} Ablagen`;
 
   if (st.score !== targetScore) {
+    const down = st.score < targetScore;
     targetScore = st.score;
-    elScore.classList.remove('bump');
+    elScore.classList.remove('bump', 'drop');
     void elScore.offsetWidth;
-    elScore.classList.add('bump');
+    elScore.classList.add(down ? 'drop' : 'bump');
   }
 }
 
@@ -234,6 +235,12 @@ export function celebrate(ev) {
     if (ev.gain >= 500_000 && !ev.gold) banner('MEGA WIN!');
   } else if (ev.type === 'draw') {
     sfx.draw();
+  } else if (ev.type === 'miss') {
+    // Danebengegriffen: Abzug am Ort des Fehlgriffs, und es wackelt.
+    sfx.bad();
+    popAt(ev.index, `−${fmt(ev.cost)}`, '#ff2e88');
+    shake();
+    if (ev.run >= 3) banner('AUFPASSEN!');
   }
   if (ev.boardClear) { sfx.clear(); banner('BOARD LEER! 🔥'); coins(); }
   else if (ev.finished === 'stuck') { sfx.bad(); banner('DURCH'); }

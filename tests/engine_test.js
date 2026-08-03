@@ -415,11 +415,127 @@ Deno.test('Risikoleiter: aufhören und leeres Konto', () => {
   assertEquals(E.canRisk(broke), false, 'ohne Punkte gibt es nichts zu riskieren');
 });
 
+Deno.test('Runden werden kürzer, der Multiplikator gleicht es aus', () => {
+  const total = 10;
+  const times = Array.from({ length: total }, (_, i) => E.roundMs(i + 1, total));
+  assertEquals(times[0], E.ROUND_MS, 'die erste Runde ist die längste');
+  assertEquals(times.at(-1), E.ROUND_MIN_MS, 'die letzte die kürzeste');
+  for (let i = 1; i < total; i++) assert(times[i] < times[i - 1], `Runde ${i + 1} muss kürzer sein`);
+  for (const ms of times) assertEquals(ms % 1000, 0, 'glatte Sekunden');
+
+  // Die verlorene Zeit kommt als Multiplikator zurück.
+  for (let r = 1; r <= total; r++) {
+    const ms = E.roundMs(r, total);
+    const mult = E.roundMult(r, total);
+    assertEquals(mult, Math.round((E.ROUND_MS / ms) * 10) / 10);
+    assert(Math.abs(ms * mult - E.ROUND_MS) < E.ROUND_MS * 0.05, 'Punkte pro Sekunde bleiben stabil');
+  }
+  assertEquals(E.roundMult(1, total), 1, 'die erste Runde zählt einfach');
+  assert(E.roundMult(total, total) > 3, 'die letzte deutlich mehr');
+
+  // Die Kurve passt sich der gewählten Rundenzahl an.
+  for (const n of [3, 5, 20]) {
+    assertEquals(E.roundMs(1, n), E.ROUND_MS);
+    assertEquals(E.roundMs(n, n), E.ROUND_MIN_MS);
+  }
+  assertEquals(E.roundMs(1, 1), E.ROUND_MS, 'Einzelrunde bleibt lang');
+});
+
+Deno.test('Rundenmultiplikator hebt alle Punkte der Runde', () => {
+  const early = E.createRound('rm-1', 1, 10);
+  const late = E.createRound('rm-1', 10, 10);
+  early.gold = []; late.gold = [];
+  assertEquals(early.roundMult, 1);
+  assert(late.roundMult > 3);
+
+  for (const st of [early, late]) {
+    st.board[18] = ((E.rankOf(st.slots[0]) + 1) % 13) + 13;
+  }
+  const a = E.play(early, 18, 10_000);
+  const b = E.play(late, 18, 10_000);
+  assertEquals(a.gain, E.SCORE.perCard);
+  assertEquals(b.gain, Math.round(E.SCORE.perCard * late.roundMult));
+  assert(b.gain > a.gain * 3, 'die kurze Runde zahlt deutlich mehr');
+});
+
+Deno.test('Fehlgriff auf eine offene Karte kostet Punkte', () => {
+  const st = E.createRound('miss-1', 1, 10);
+  st.gold = [];
+  st.score = 1_000_000;
+
+  // Eine offene Karte, die garantiert nicht passt.
+  st.board[18] = ((E.rankOf(st.slots[0]) + 5) % 13) + 26;
+  assertEquals(E.matchingSlot(st, 18), -1);
+
+  const ev = E.miss(st, 18, 1000);
+  assert(ev, 'Fehlgriff muss zählen');
+  assertEquals(ev.type, 'miss');
+  assertEquals(ev.cost, E.SCORE.miss, 'erster Fehlgriff kostet einfach');
+  assertEquals(st.score, 1_000_000 - E.SCORE.miss);
+  assertEquals(st.misses, 1);
+  assertEquals(st.taken[18], false, 'die Karte bleibt liegen');
+
+  // Weiterklicken wird teurer – Blindklicken soll sich nicht lohnen.
+  const second = E.miss(st, 18, 1200);
+  assertEquals(second.cost, E.SCORE.miss * 2);
+  const third = E.miss(st, 18, 1400);
+  assertEquals(third.cost, E.SCORE.miss * 3);
+  assertEquals(st.missRun, 3);
+
+  // Gedeckelt.
+  for (let k = 0; k < 6; k++) E.miss(st, 18, 2000 + k);
+  assertEquals(E.miss(st, 18, 3000).cost, E.SCORE.miss * E.SCORE.maxMissRun);
+
+  // Ein gültiger Zug setzt die Fehlserie zurück.
+  st.board[19] = ((E.rankOf(st.slots[0]) + 1) % 13) + 13;
+  assert(E.play(st, 19, 4000));
+  assertEquals(st.missRun, 0);
+  assertEquals(E.miss(st, 18, 5000).cost, E.SCORE.miss);
+});
+
+Deno.test('Fehlgriff: nur offene Karten kosten, und nie unter null', () => {
+  const st = E.createRound('miss-2', 1, 10);
+  st.gold = [];
+
+  assertEquals(E.miss(st, 0), null, 'verdeckte Karte kostet nichts');
+  st.taken[18] = true;
+  assertEquals(E.miss(st, 18), null, 'schon abgeräumte Karte kostet nichts');
+  assertEquals(E.miss(st, -1), null);
+  assertEquals(E.miss(st, 99), null);
+
+  // Eine passende Karte ist kein Fehlgriff.
+  st.board[19] = ((E.rankOf(st.slots[0]) + 1) % 13) + 13;
+  assertEquals(E.miss(st, 19), null, 'gültige Züge laufen über play()');
+
+  // Der Abzug hört bei null auf.
+  st.board[20] = ((E.rankOf(st.slots[0]) + 5) % 13) + 26;
+  st.score = 5_000;
+  const ev = E.miss(st, 20, 1000);
+  assertEquals(st.score, 0);
+  assertEquals(ev.cost, 5_000, 'abgezogen wird nur, was da war');
+
+  st.over = true;
+  assertEquals(E.miss(st, 20, 2000), null, 'nach dem Rundenende nicht mehr');
+});
+
+Deno.test('Fehlgriff in einer späten Runde kostet mehr', () => {
+  const mk = (r) => {
+    const st = E.createRound('miss-3', r, 10);
+    st.gold = [];
+    st.score = 5_000_000;
+    st.board[18] = ((E.rankOf(st.slots[0]) + 5) % 13) + 26;
+    return st;
+  };
+  const early = E.miss(mk(1), 18, 1000);
+  const late = E.miss(mk(10), 18, 1000);
+  assert(late.cost > early.cost * 3, `spät ${late.cost} muss über früh ${early.cost} liegen`);
+});
+
 Deno.test('publicStats liefert genau die Gegner-Infos', () => {
   const st = E.createRound('stats-1');
   const s = E.publicStats(st);
   assertEquals(Object.keys(s).sort(), [
-    'best', 'bestStreak', 'clears', 'finished', 'golds', 'left', 'over',
+    'best', 'bestStreak', 'clears', 'finished', 'golds', 'left', 'misses', 'over',
     'riskLost', 'riskWon', 'risking', 'score', 'streak',
   ]);
   assertEquals(s.left, 28);

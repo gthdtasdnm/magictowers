@@ -11,8 +11,24 @@ export const BOARD_SIZE = 28;
 /** Ab welchem Streak der 2. bzw. 3. Ablageplatz aufgeht. */
 export const SLOT_STREAK = [5, 10];
 
-export const ROUND_MS = 75_000;
+// Die Runden werden immer kürzer: von entspannt zu hektisch. Die verlorene Zeit
+// wird über einen Rundenmultiplikator exakt wieder aufgewogen, damit späte
+// Runden nicht weniger wert sind als frühe.
+export const ROUND_MS = 90_000;      // erste Runde
+export const ROUND_MIN_MS = 25_000;  // letzte Runde
 export const ROUNDS = 10;
+
+/** Rundenlänge in ms – linear von ROUND_MS auf ROUND_MIN_MS über die Partie. */
+export function roundMs(round, totalRounds = ROUNDS) {
+  if (totalRounds <= 1) return ROUND_MS;
+  const f = Math.min(1, Math.max(0, (round - 1) / (totalRounds - 1)));
+  return Math.round((ROUND_MS + (ROUND_MIN_MS - ROUND_MS) * f) / 1000) * 1000;
+}
+
+/** Genau so viel mehr Punkte, wie die Runde kürzer ist. */
+export function roundMult(round, totalRounds = ROUNDS) {
+  return Math.round((ROUND_MS / roundMs(round, totalRounds)) * 10) / 10;
+}
 
 /** Ab dieser Runde können die verdeckten Karten wirklich verdeckt liegen. */
 export const FOG_FROM_ROUND = 3;
@@ -27,6 +43,8 @@ export const SCORE = {
   boardClear: 2_000_000,
   perLeftoverCard: 150_000,
   goldMult: 10,       // Goldkarte zahlt das Zehnfache
+  miss: 20_000,       // Fehlgriff auf eine offene Karte, × Fehlserie (max ×5)
+  maxMissRun: 5,
 };
 
 /** Bonusleiste: läuft dauernd aus, füllt sich durch schnelle Züge. */
@@ -143,11 +161,14 @@ export function goldFor(seed) {
 
 // -------------------------------------------------------------------- State
 
-export function createRound(seed, round = 1) {
+export function createRound(seed, round = 1, totalRounds = ROUNDS) {
   const cards = shuffled(seed);
   const st = {
     seed,
     round,
+    totalRounds,
+    ms: roundMs(round, totalRounds),
+    roundMult: roundMult(round, totalRounds),
     fog: fogFor(seed, round),
     gold: goldFor(seed),
     board: cards.slice(0, BOARD_SIZE),
@@ -167,6 +188,8 @@ export function createRound(seed, round = 1) {
     lastPlayT: 0,   // Zeitpunkt der zuletzt gelegten Karte
     golds: 0,       // eingesammelte Goldkarten
     best: 0,        // dickster Einzelgewinn der Runde
+    misses: 0,      // Fehlgriffe insgesamt
+    missRun: 0,     // Fehlgriffe in Folge – erhöht den Abzug
     risk: { used: 0, won: 0, lost: 0, done: false },
     over: false,
     finished: null, // 'clear' | 'stuck' | null
@@ -269,7 +292,7 @@ function settle(st, ev) {
   if (st.taken.every(Boolean)) {
     // Board leergeräumt: fette Prämie, danach ist die Runde für dich gelaufen.
     const left = st.deck.length - st.deckPos;
-    const bonus = SCORE.boardClear + left * SCORE.perLeftoverCard;
+    const bonus = Math.round((SCORE.boardClear + left * SCORE.perLeftoverCard) * st.roundMult);
     st.score += bonus;
     ev.gain += bonus;
     st.clears++;
@@ -305,7 +328,7 @@ export function play(st, i, t = 0) {
   if (gold) { st.boost = 1; st.golds++; }
 
   const m = mults(st);
-  let gain = Math.round(SCORE.perCard * m.total) * (gold ? SCORE.goldMult : 1);
+  let gain = Math.round(SCORE.perCard * m.total * st.roundMult) * (gold ? SCORE.goldMult : 1);
 
   const ev = {
     type: 'play', index: i, card, slot, gold,
@@ -316,10 +339,12 @@ export function play(st, i, t = 0) {
   for (const p of PEAK_TIPS) {
     if (!st.peaks[p] && st.taken[p]) {
       st.peaks[p] = true;
-      gain += SCORE.peak;
+      gain += Math.round(SCORE.peak * st.roundMult);
       ev.peaks.push(p);
     }
   }
+
+  st.missRun = 0;   // sauberer Zug bricht die Fehlserie
 
   st.score += gain;
   st.best = Math.max(st.best, gain);
@@ -331,6 +356,27 @@ export function play(st, i, t = 0) {
 
   pushSlot(st, card);
   return settle(st, ev);
+}
+
+/**
+ * Danebengegriffen: eine offene Karte angeklickt, die nirgends passt. Kostet
+ * Punkte, und zwar zunehmend – Blindklicken durchs Feld soll sich nicht lohnen.
+ * Verdeckte und schon abgeräumte Karten kosten nichts, die sieht man ja.
+ */
+export function miss(st, i, t = 0) {
+  if (st.over) return null;
+  if (i < 0 || i >= BOARD_SIZE) return null;
+  if (st.taken[i] || !isOpen(st, i)) return null;
+  if (matchingSlot(st, i) >= 0) return null;   // der Zug wäre gültig gewesen
+
+  st.misses++;
+  st.missRun++;
+  const cost = Math.round(SCORE.miss * st.roundMult * Math.min(st.missRun, SCORE.maxMissRun));
+  const before = st.score;
+  st.score = Math.max(0, st.score - cost);   // unter null geht es nicht
+  drainBoost(st, t);
+
+  return { type: 'miss', index: i, card: st.board[i], cost: before - st.score, run: st.missRun };
 }
 
 /** Karte vom Nachziehstapel holen. Bricht den Streak und klappt die Ablage zu. */
@@ -393,6 +439,7 @@ export function publicStats(st) {
     clears: st.clears,
     golds: st.golds,
     best: st.best,
+    misses: st.misses,
     left: st.taken.filter((t) => !t).length,
     over: st.over,
     finished: st.finished,

@@ -185,6 +185,10 @@ input:focus, select:focus { outline: none; border-color: var(--hot); box-shadow:
   padding: 6px 11px; border-radius: 99px; white-space: nowrap; }
 .round-pill b { color: var(--ink); font-size: 15px; }
 .round-pill i { font-style: normal; opacity: .6; }
+/* Rundenmultiplikator: kürzere Runde, dafür mehr Punkte */
+.round-pill em { font-style: normal; font-weight: 800; margin-left: 6px; padding: 1px 5px;
+  border-radius: 5px; font-variant-numeric: tabular-nums; opacity: .5; }
+.round-pill em.on { opacity: 1; color: var(--gold); background: rgba(255, 212, 71, .18); }
 
 .score-box { display: flex; flex-direction: column; line-height: 1; }
 .score-box .lbl { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
@@ -193,6 +197,8 @@ input:focus, select:focus { outline: none; border-color: var(--hot); box-shadow:
 .score-box b { font-variant-numeric: tabular-nums; }
 .score-box b.bump { animation: bump .3s cubic-bezier(.3,1.6,.5,1); }
 @keyframes bump { 50% { transform: scale(1.14); color: var(--gold); } }
+.score-box b.drop { animation: drop .35s ease; }
+@keyframes drop { 50% { transform: scale(.9) translateY(3px); color: var(--hot); } }
 
 /* Die Multiplikator-Kette: Streak × Bonusleiste × Türme */
 .mults { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
