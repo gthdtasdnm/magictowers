@@ -55,6 +55,7 @@ Deno.test('Deterministisch: gleicher Seed, gleiches Blatt', () => {
 
 Deno.test('Legen: Karte weg, Ablage rutscht, Streak und Punkte steigen', () => {
   const st = E.createRound('play-1');
+  st.gold = [];   // Goldkarten würden den Wert verzehnfachen
   // Passende Basiskarte zur Ablage bauen statt suchen.
   const top = st.slots[0];
   st.board[18] = ((E.rankOf(top) + 1) % 13) + 13; // eine Herz-Karte, Rang +1
@@ -64,7 +65,7 @@ Deno.test('Legen: Karte weg, Ablage rutscht, Streak und Punkte steigen', () => {
   assert(ev, 'Zug muss zulässig sein');
   assertEquals(st.taken[18], true);
   assertEquals(st.streak, 1);
-  assertEquals(st.score, E.SCORE.perCard * 1, 'ohne Bonusleiste der glatte Grundwert');
+  assertEquals(st.score, E.SCORE.perCard, 'ohne Multiplikatoren der glatte Grundwert');
   assertEquals(st.slots[0], st.board[18], 'gelegte Karte liegt oben');
   assertEquals(st.slots[1], before, 'alte Karte rutscht einen Slot nach hinten');
 });
@@ -167,6 +168,7 @@ Deno.test('Ältere Ablagekarten bleiben legbar, solange der Slot offen ist', () 
 
 Deno.test('Punkte skalieren mit dem Streak, gedeckelt bei ×10', () => {
   const st = E.createRound('score-1');
+  st.gold = [];
   // Langsame Züge: die Bonusleiste bleibt leer, die Punkte also glatt.
   chain(st, 10, 0, 20_000);
   let expected = 0;
@@ -176,10 +178,12 @@ Deno.test('Punkte skalieren mit dem Streak, gedeckelt bei ×10', () => {
 
 Deno.test('Bonusleiste: füllt sich bei schnellen Zügen und läuft wieder aus', () => {
   const fast = E.createRound('boost-1');
+  fast.gold = [];
   chain(fast, 4, 0, 120);   // vier Karten im 120-ms-Takt
   assert(fast.boost > 0.5, `Leiste sollte gut voll sein, ist ${fast.boost}`);
 
   const slow = E.createRound('boost-1');
+  slow.gold = [];
   chain(slow, 4, 0, 4000);  // dieselben Karten, aber gemütlich
   assertEquals(slow.boost, 0, 'zu langsam für den Bonus');
   assert(fast.score > slow.score, 'schnelles Spiel bringt mehr Punkte');
@@ -193,6 +197,7 @@ Deno.test('Bonusleiste: füllt sich bei schnellen Zügen und läuft wieder aus',
 
 Deno.test('Ziehen füttert die Leiste nicht, lässt sie aber auslaufen', () => {
   const st = E.createRound('boost-2');
+  st.gold = [];
   chain(st, 4, 0, 120);
   const before = st.boost;
   E.draw(st, st.boostT + 1000);
@@ -296,12 +301,130 @@ Deno.test('Verdeckte Karten decken sich auf, sobald sie frei sind', () => {
   assertEquals(E.isHidden(st, E.LAYOUT.find((n) => n.row === 0).i), false);
 });
 
+Deno.test('Goldkarten: gleiche Plätze für alle, zehnfacher Wert, volle Leiste', () => {
+  const st = E.createRound('gold-1');
+  assertEquals(st.gold.length, E.GOLD_COUNT);
+  assertEquals(new Set(st.gold).size, E.GOLD_COUNT, 'keine doppelten Plätze');
+  assertEquals(st.gold, E.goldFor('gold-1'), 'hängt nur am Seed');
+  assertEquals(E.createRound('gold-1', 7).gold, st.gold, 'und nicht an der Runde');
+  for (const i of st.gold) assert(i >= 0 && i < E.BOARD_SIZE);
+
+  // Eine Goldkarte in die offene Reihe legen und mit einer normalen vergleichen.
+  const goldAt = 18, plainAt = 19;
+  const mk = (seed) => { const s = E.createRound(seed); s.gold = []; return s; };
+  const withGold = mk('gold-2');
+  withGold.gold = [goldAt];
+  const plain = mk('gold-2');
+
+  for (const s of [withGold, plain]) {
+    s.board[goldAt] = ((E.rankOf(s.slots[0]) + 1) % 13) + 13;
+    s.board[plainAt] = ((E.rankOf(s.slots[0]) + 1) % 13) + 26;
+  }
+  const gEv = E.play(withGold, goldAt, 50_000);
+  const pEv = E.play(plain, plainAt, 50_000);
+
+  assertEquals(gEv.gold, true);
+  assertEquals(pEv.gold, false);
+  assertEquals(withGold.boost, 1, 'Goldkarte füllt die Leiste sofort komplett');
+  assertEquals(withGold.golds, 1);
+  // Zehnfach auf den Grundwert, plus die dadurch volle Bonusleiste.
+  assertEquals(gEv.gain, E.SCORE.perCard * (1 + E.BOOST.maxMult) * E.SCORE.goldMult);
+  assert(gEv.gain > pEv.gain * 10, `Gold ${gEv.gain} muss klar über normal ${pEv.gain} liegen`);
+});
+
+Deno.test('Multiplikator-Kette: Streak × Bonusleiste × Türme', () => {
+  const st = E.createRound('mult-1');
+  st.gold = [];
+  let m = E.mults(st);
+  assertEquals(m.streak, 1, 'ohne Zug zählt der Streak als ×1');
+  assertEquals(m.boost, 1);
+  assertEquals(m.tower, 1);
+  assertEquals(m.total, 1);
+
+  st.streak = 7;
+  st.peaks = [true, true, false];
+  st.boost = 1;
+  st.boostT = 0;
+  m = E.mults(st);
+  assertEquals(m.streak, 7);
+  assertEquals(m.boost, 1 + E.BOOST.maxMult);
+  assertEquals(m.tower, 4, 'jede abgeräumte Turmspitze verdoppelt');
+  assertEquals(m.total, 7 * (1 + E.BOOST.maxMult) * 4);
+
+  st.peaks = [true, true, true];
+  assertEquals(E.towerMult(st), 8, 'alle drei Türme offen: ×8');
+
+  st.streak = 40;
+  assertEquals(E.mults(st).streak, E.SCORE.maxStreakMult, 'der Streak-Faktor ist gedeckelt');
+});
+
+Deno.test('Turmspitze hebt den Multiplikator erst für die nächste Karte', () => {
+  const st = E.createRound('tower-1');
+  st.gold = [];
+  // Turmspitze 0 freiräumen und legen.
+  for (const c of E.LAYOUT[0].covers) { st.taken[c] = true; for (const d of E.LAYOUT[c].covers) st.taken[d] = true; }
+  st.slots[0] = ((E.rankOf(st.board[0]) + 1) % 13) + 13;
+  st.slots[1] = null; st.slots[2] = null;
+
+  const ev = E.play(st, 0, 90_000);
+  assertEquals(ev.peaks, [0]);
+  assertEquals(ev.mults.tower, 1, 'diese Karte zählt noch ohne den neuen Turm');
+  assertEquals(ev.gain, E.SCORE.perCard + E.SCORE.peak);
+  assertEquals(E.towerMult(st), 2, 'ab jetzt zählt der Turm mit');
+});
+
+Deno.test('Risikoleiter: Einsatz verdoppeln oder verlieren', () => {
+  const st = E.createRound('risk-1');
+  st.score = 1_000_000;
+  assertEquals(E.canRisk(st), false, 'vor dem Rundenende gibt es kein Risiko');
+
+  st.over = true;
+  assertEquals(E.canRisk(st), true);
+  assertEquals(E.riskStake(st), 500_000, 'es geht immer um die Hälfte');
+
+  const win = E.applyRisk(st, true);
+  assertEquals(win.stake, 500_000);
+  assertEquals(st.score, 1_500_000, 'gewonnen heißt Einsatz obendrauf');
+  assertEquals(st.risk.won, 1);
+
+  const lose = E.applyRisk(st, false);
+  assertEquals(lose.stake, 750_000);
+  assertEquals(st.score, 750_000, 'verloren heißt Einsatz weg');
+  assertEquals(st.risk.lost, 1);
+
+  // Nach der letzten Sprosse ist Schluss.
+  assertEquals(st.risk.used, 2);
+  assert(E.canRisk(st));
+  E.applyRisk(st, true);
+  assertEquals(st.risk.used, E.RISK.steps);
+  assertEquals(st.risk.done, true);
+  assertEquals(E.canRisk(st), false, 'die Leiter hat nur drei Sprossen');
+});
+
+Deno.test('Risikoleiter: aufhören und leeres Konto', () => {
+  const st = E.createRound('risk-2');
+  st.over = true;
+  st.score = 400_000;
+  E.stopRisk(st);
+  assertEquals(E.canRisk(st), false, 'wer behält, ist raus');
+  assertEquals(st.score, 400_000, 'Behalten kostet nichts');
+
+  const broke = E.createRound('risk-3');
+  broke.over = true;
+  broke.score = 0;
+  assertEquals(E.canRisk(broke), false, 'ohne Punkte gibt es nichts zu riskieren');
+});
+
 Deno.test('publicStats liefert genau die Gegner-Infos', () => {
   const st = E.createRound('stats-1');
   const s = E.publicStats(st);
-  assertEquals(Object.keys(s).sort(), ['bestStreak', 'clears', 'finished', 'left', 'over', 'score', 'streak']);
+  assertEquals(Object.keys(s).sort(), [
+    'best', 'bestStreak', 'clears', 'finished', 'golds', 'left', 'over',
+    'riskLost', 'riskWon', 'risking', 'score', 'streak',
+  ]);
   assertEquals(s.left, 28);
   assertEquals(s.over, false);
+  assertEquals(s.risking, false);
 });
 
 Deno.test('snapshot/restore ergibt denselben Zustand', () => {

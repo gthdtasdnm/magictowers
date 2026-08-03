@@ -56,19 +56,39 @@ und drehen sich erst um, wenn beide Karten davor weg sind. Ob eine Runde verdeck
 läuft, hängt am Seed – es gilt also **für alle am Tisch gleich** und wird zu den
 späteren Runden hin immer wahrscheinlicher.
 
-**Punkte**
+**Goldkarten.** Drei Plätze im Feld sind ⭐ markiert – aus dem Seed abgeleitet, also bei
+allen an derselben Stelle. Wer eine legt, kassiert den **zehnfachen** Kartenwert und hat
+augenblicklich die volle Bonusleiste.
+
+**Punkte.** Gespielt wird um dicke Zahlen. Eine Karte ist 5.000 wert, aber alles hängt
+an der Multiplikator-Kette:
+
+```
+Punkte = 5.000 × Streak (bis ×10) × Bonusleiste (bis ×3) × Türme (bis ×8)
+```
 
 | | |
 |---|---|
-| Karte legen | `10 × Streak × Bonusleiste`, Streak-Faktor gedeckelt bei 10 |
+| Karte legen | 5.000 × Kette – von 5.000 bis **1.200.000** pro Karte |
+| Goldkarte ⭐ | zehnfacher Kartenwert, Bonusleiste sofort voll |
 | Streak 5 / 10 | 2. bzw. 3. Ablagekarte offen |
-| Turmspitze abgeräumt | +100 |
-| Board komplett leer | +300 und +25 pro übriger Stapelkarte |
+| Turmspitze abgeräumt | +500.000, und der Turm-Multiplikator **verdoppelt** sich (×1 → ×2 → ×4 → ×8) |
+| Board komplett leer | +2.000.000 und +150.000 pro übriger Stapelkarte |
+
+Eine mittelmäßige Runde landet bei rund **2 Millionen**, eine richtig gute bei
+**10 Millionen und mehr** – und die Risikoleiter kann das noch mal verdreifachen.
+
+**Risikoleiter.** Sobald du durch bist, steht die Hälfte deiner Rundenpunkte zur
+Wahl: 50/50, gewonnen heißt verdoppelt, verloren heißt weg. Bis zu drei Sprossen,
+Aufhören geht jederzeit. Den Münzwurf macht **der Server** – der Client könnte ihn
+sonst vorher ausrechnen und nur bei sicherem Gewinn ziehen. Der Erwartungswert ist
+exakt neutral, die Varianz ist es nicht.
 
 **Rundenende.** Ist der Stapel leer und passt nichts mehr, bist du **durch** – genau
 wie wenn du das Board leergeräumt hast. Es wird nicht neu ausgeteilt; du siehst deinen
-Stand und wartest, bis auch die anderen fertig sind. Sobald alle durch sind, kommt
-sofort die Auswertung, spätestens nach **75 Sekunden**.
+Stand, darfst an die Risikoleiter und wartest, bis auch die anderen fertig sind. Sobald
+alle durch sind, bleiben noch 10 Sekunden fürs Risiko, dann kommt die Auswertung –
+spätestens nach **75 Sekunden**.
 
 **Alle Spieler bekommen exakt dasselbe Blatt** – es entscheidet also nur, wer schneller
 und cleverer räumt. Sobald alle „Bereit" drücken, geht es weiter. Nach der letzten
@@ -116,12 +136,51 @@ deno --version
 ### 2. Code hochladen
 
 ```bash
-sudo mkdir -p /opt/magictowers
-sudo chown $USER:$USER /opt/magictowers
-rsync -av --exclude data/ ./ user@dein-server:/opt/magictowers/
+ssh user@inf-zeus.de 'sudo mkdir -p /opt/magictowers && sudo chown $USER /opt/magictowers'
+rsync -av --exclude data/ --exclude .git/ ./ user@inf-zeus.de:/opt/magictowers/
 ```
 
-### 3. Als Dienst einrichten
+Oder direkt vom Repo aus – dann ist ein Update später nur `git pull` plus Neustart:
+
+```bash
+ssh user@inf-zeus.de
+sudo git clone https://github.com/gthdtasdnm/magictowers.git /opt/magictowers
+```
+
+### 3. Dauerhaft laufen lassen (PM2)
+
+Läuft auf demselben Server schon PM2 (z. B. für PickUp), kommt Magic Towers einfach
+daneben. Deno ist kein JS-Skript, deshalb `--interpreter none` und die Argumente
+hinter `--`:
+
+```bash
+cd /opt/magictowers
+PORT=8080 HOST=127.0.0.1 MT_DATA=/opt/magictowers/data/leaderboard.json \
+pm2 start /usr/local/bin/deno --name magictowers --interpreter none --cwd /opt/magictowers -- \
+  run --allow-net --allow-read --allow-write --allow-env server/main.js
+
+pm2 save
+pm2 logs magictowers
+```
+
+`pm2 startup` muss nur einmal pro Server laufen – ist das für ein anderes Projekt
+schon passiert, reicht hier `pm2 save`.
+
+Zwei Dinge, die man leicht übersieht:
+
+- **Port frei wählen.** Läuft PickUp auf 3000, nimm für Magic Towers 8080 (so steht es
+  auch in der Apache-Config unten). Zwei Dienste auf demselben Port starten nicht.
+- **`HOST=127.0.0.1`** – sonst hängt der Deno-Prozess offen im Netz und man käme unter
+  Umgehung von Apache direkt auf `inf-zeus.de:8080`.
+
+Update später:
+
+```bash
+cd /opt/magictowers && git pull && pm2 restart magictowers
+```
+
+<details>
+<summary>Alternative: systemd statt PM2</summary>
 
 `/etc/systemd/system/magictowers.service`:
 
@@ -152,35 +211,57 @@ sudo systemctl enable --now magictowers
 sudo journalctl -u magictowers -f
 ```
 
-### 4. Nginx davor (WebSocket nicht vergessen!)
+</details>
 
-```nginx
-server {
-    listen 80;
-    server_name spiel.deine-domain.de;
+### 4. Apache als Reverse Proxy – im Unterordner
 
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 3600s;
-    }
-}
+Die App hängt an **keinem** festen Pfad: alle Verweise im HTML sind relativ und die
+WebSocket-URL wird aus `location.pathname` gebaut. Sie läuft deshalb genauso unter
+`/` wie unter `/magictowers/`. Apache schneidet das Präfix beim Weiterleiten ab, der
+Deno-Prozess sieht also immer nur Wurzelpfade.
+
+Module aktivieren – `proxy_wstunnel` ist der entscheidende:
+
+```bash
+sudo a2enmod proxy proxy_http proxy_wstunnel rewrite
+sudo systemctl restart apache2
+```
+
+In den vorhandenen vHost von `inf-zeus.de`:
+
+```apache
+# WebSocket MUSS zuerst stehen – Apache nimmt die erste passende Regel,
+# und die allgemeine unten würde den Upgrade-Handshake verschlucken.
+ProxyPass        /magictowers/ws  ws://127.0.0.1:8080/ws
+ProxyPassReverse /magictowers/ws  ws://127.0.0.1:8080/ws
+
+ProxyPass        /magictowers/    http://127.0.0.1:8080/
+ProxyPassReverse /magictowers/    http://127.0.0.1:8080/
+
+# Ohne den Slash am Ende wäre der Basispfad "/" und die relativen Pfade
+# (css/style.css …) würden auf inf-zeus.de/css/style.css zeigen.
+RedirectMatch ^/magictowers$ /magictowers/
 ```
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/magictowers /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d spiel.deine-domain.de
+sudo apachectl configtest && sudo systemctl reload apache2
 ```
 
-Ohne die drei `Upgrade`/`Connection`/`http_version`-Zeilen bricht die WebSocket-Verbindung
-sofort ab und das Spiel hängt in der Lobby – das ist der Klassiker.
+Die drei Fallstricke in genau dieser Reihenfolge:
 
-Danach den Link teilen: `https://spiel.deine-domain.de/?tisch=2` führt direkt an Tisch 2.
+1. **`proxy_wstunnel` fehlt** → die Verbindung bricht sofort ab, das Spiel hängt in
+   der Lobby. Das ist der Klassiker.
+2. **`/magictowers/ws` steht nach der allgemeinen Regel** → gleicher Effekt, weil der
+   Upgrade als normales HTTP weitergereicht wird.
+3. **Der Redirect auf den Schrägstrich fehlt** → wer `inf-zeus.de/magictowers` ohne
+   Slash aufruft, bekommt eine Seite ohne CSS und ohne JavaScript.
+
+Läuft der vHost schon über HTTPS (certbot), ist nichts weiter zu tun – der Client
+schaltet automatisch auf `wss://`.
+
+Danach: `https://inf-zeus.de/magictowers/` – und `?tisch=2` führt direkt an Tisch 2.
+
+**Anderer Pfad?** Nur die vier Zeilen oben anpassen, im Code ist nichts zu ändern.
 
 ---
 
@@ -196,7 +277,9 @@ export const MAX_SLOTS = 3;         // so viele Ablagekarten maximal
 export const BASE_SLOTS = 1;        // so viele ohne Kombi
 export const SLOT_STREAK = [5, 10]; // ab welchem Streak die 2./3. aufgeht
 export const FOG_FROM_ROUND = 3;    // ab wann verdeckt gespielt wird
+export const GOLD_COUNT = 3;        // Goldkarten pro Runde
 export const BOOST = { ... };       // Bonusleiste
+export const RISK = { ... };        // Risikoleiter
 export const SCORE = { ... };       // Punktevergabe
 ```
 

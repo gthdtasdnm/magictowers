@@ -39,6 +39,7 @@ for (const t of TABLES) {
     seed: null,
     startsAt: 0,
     endsAt: 0,
+    riskAt: 0,
     timers: [],
   });
 }
@@ -136,6 +137,8 @@ export function joinRoom(client, code) {
     rounds: [],
     bestStreak: 0,
     clears: 0,
+    golds: 0,
+    best: 0,
   });
   // Wer als Erster am Tisch sitzt, ist Host und startet die Partie.
   if (!room.hostId || !room.players.some((p) => p.id === room.hostId)) room.hostId = client.id;
@@ -240,6 +243,7 @@ function resetTable(room) {
   room.round = 0;
   room.totalRounds = E.ROUNDS;
   room.seed = null;
+  room.riskAt = 0;
 }
 
 function roomState(room) {
@@ -308,7 +312,7 @@ export function hostStart(client) {
   if (!active.every((p) => p.ready || p.id === room.hostId)) {
     return send(client, 'error', { msg: 'Es sind noch nicht alle bereit.' });
   }
-  for (const p of room.players) { p.total = 0; p.rounds = []; p.bestStreak = 0; p.clears = 0; }
+  for (const p of room.players) { p.total = 0; p.rounds = []; p.bestStreak = 0; p.clears = 0; p.golds = 0; p.best = 0; }
   room.round = 0;
   startRound(room);
 }
@@ -317,7 +321,7 @@ function resetGame(room) {
   clearTimers(room);
   room.phase = 'lobby';
   room.round = 0;
-  for (const p of room.players) { p.ready = false; p.total = 0; p.rounds = []; p.bestStreak = 0; p.clears = 0; p.st = null; }
+  for (const p of room.players) { p.ready = false; p.total = 0; p.rounds = []; p.bestStreak = 0; p.clears = 0; p.golds = 0; p.best = 0; p.st = null; }
   syncRoom(room);
   pushLobby();
 }
@@ -331,6 +335,7 @@ function startRound(room) {
   room.seed = `${room.code}-${room.round}-${Math.random().toString(36).slice(2, 10)}`;
   room.startsAt = Date.now() + COUNTDOWN_MS;
   room.endsAt = room.startsAt + E.ROUND_MS;
+  room.riskAt = 0;
 
   for (const p of room.players) {
     p.ready = false;
@@ -374,13 +379,42 @@ function pushLive(room) {
   broadcast(room, 'live', { live });
 }
 
-/** Sobald alle durch sind (Board leer oder nichts mehr möglich), ist die Runde vorbei. */
+/**
+ * Sobald alle durch sind (Board leer oder nichts mehr möglich), ist die Runde
+ * vorbei – aber erst, wenn auch niemand mehr an der Risikoleiter steht. Wer noch
+ * riskieren darf, bekommt dafür ein kurzes Fenster.
+ */
 function maybeEndRound(room) {
   if (room.phase !== 'playing' && room.phase !== 'countdown') return;
   const active = room.players.filter((p) => p.online);
   if (!active.length || !active.every((p) => p.st?.over)) return;
   pushLive(room);
-  endRound(room);
+
+  if (active.every((p) => !E.canRisk(p.st))) return endRound(room);
+  if (room.riskAt) return;   // Fenster läuft schon
+
+  room.riskAt = Date.now() + E.RISK.windowMs;
+  broadcast(room, 'riskWindow', { endsAt: room.riskAt });
+  room.timers.push(setTimeout(() => endRound(room), E.RISK.windowMs));
+}
+
+/** Ein Zug auf der Risikoleiter. Der Münzwurf passiert hier, nicht im Client. */
+export function risk(client, go) {
+  const room = client.room;
+  if (!room) return;
+  const p = room.players.find((x) => x.id === client.id);
+  if (!p?.st) return;
+  if (room.phase !== 'playing' && room.phase !== 'countdown') return;
+
+  if (!go) {
+    send(client, 'risk', E.stopRisk(p.st));
+  } else {
+    if (!E.canRisk(p.st)) return;
+    const res = E.applyRisk(p.st, Math.random() < 0.5);
+    send(client, 'risk', res);
+    pushLive(room);
+  }
+  maybeEndRound(room);
 }
 
 function endRound(room, aborted = false) {
@@ -388,15 +422,18 @@ function endRound(room, aborted = false) {
   clearTimers(room);
 
   const results = room.players.map((p) => {
-    const s = p.st ? E.publicStats(p.st) : { score: 0, bestStreak: 0, clears: 0 };
+    const s = p.st ? E.publicStats(p.st) : { score: 0, bestStreak: 0, clears: 0, golds: 0, best: 0, riskWon: 0, riskLost: 0 };
     p.rounds.push(s.score);
     p.total += s.score;
     p.bestStreak = Math.max(p.bestStreak, s.bestStreak);
     p.clears += s.clears;
+    p.golds += s.golds;
+    p.best = Math.max(p.best, s.best);
     p.ready = false;
     return {
       id: p.id, name: p.name, online: p.online,
       score: s.score, streak: s.bestStreak, clears: s.clears, total: p.total,
+      golds: s.golds, best: s.best, riskWon: s.riskWon, riskLost: s.riskLost,
     };
   }).sort((a, b) => b.score - a.score);
 
@@ -411,7 +448,7 @@ function endRound(room, aborted = false) {
 
   if (last) {
     const final = rank(room.players
-      .map((p) => ({ id: p.id, name: p.name, score: p.total, rounds: p.rounds, bestStreak: p.bestStreak, clears: p.clears }))
+      .map((p) => ({ id: p.id, name: p.name, score: p.total, rounds: p.rounds, bestStreak: p.bestStreak, clears: p.clears, golds: p.golds, best: p.best }))
       .sort((a, b) => b.score - a.score));
     if (!aborted && final.length >= MIN_PLAYERS) LB.record(final, room.name);
     broadcast(room, 'gameEnd', { results: final, aborted });

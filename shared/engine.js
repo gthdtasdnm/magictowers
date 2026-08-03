@@ -17,20 +17,34 @@ export const ROUNDS = 10;
 /** Ab dieser Runde können die verdeckten Karten wirklich verdeckt liegen. */
 export const FOG_FROM_ROUND = 3;
 
+// Gespielt wird um dicke Zahlen: eine Karte bringt im Grundwert 2.500, unter
+// voller Multiplikator-Kette aber 300.000. Eine starke Runde landet damit im
+// zweistelligen Millionenbereich.
 export const SCORE = {
-  perCard: 10,        // * Streak (gedeckelt), danach * Bonusleiste
+  perCard: 5_000,     // × Streak × Bonusleiste × Türme
   maxStreakMult: 10,
-  peak: 100,
-  boardClear: 300,
-  perLeftoverCard: 25,
+  peak: 500_000,      // Turmspitze abgeräumt
+  boardClear: 2_000_000,
+  perLeftoverCard: 150_000,
+  goldMult: 10,       // Goldkarte zahlt das Zehnfache
 };
 
 /** Bonusleiste: läuft dauernd aus, füllt sich durch schnelle Züge. */
 export const BOOST = {
-  drainMs: 5000,   // volle Leiste ist nach 5 s leer
-  fastMs: 1200,    // schneller als das zählt als „hintereinander"
-  gain: 0.4,       // maximaler Zuwachs pro Karte
-  maxMult: 1,      // volle Leiste = doppelte Punkte
+  drainMs: 6000,   // volle Leiste ist nach 6 s leer
+  fastMs: 1500,    // schneller als das zählt als „hintereinander"
+  gain: 0.5,       // maximaler Zuwachs pro Karte
+  maxMult: 2,      // volle Leiste = dreifache Punkte
+};
+
+/** So viele Goldkarten liegen pro Runde im Feld – bei allen an derselben Stelle. */
+export const GOLD_COUNT = 3;
+
+/** Risikoleiter: nach dem Rundenende darf man seinen Einsatz verdoppeln. */
+export const RISK = {
+  steps: 3,        // so oft darf man hoch
+  share: 0.5,      // so viel vom Rundenkonto steht jedes Mal auf dem Spiel
+  windowMs: 10_000, // so lange wartet der Tisch am Ende noch aufs Risiko
 };
 
 // ---------------------------------------------------------------- Kartenwerte
@@ -116,6 +130,17 @@ export function fogFor(seed, round) {
   return rnd() < Math.min(1, 0.45 + 0.15 * (round - FOG_FROM_ROUND));
 }
 
+/** Wo die Goldkarten liegen. Hängt nur am Seed – also bei allen gleich. */
+export function goldFor(seed) {
+  const rnd = mulberry32(hashSeed(`${seed}#gold`));
+  const pool = Array.from({ length: BOARD_SIZE }, (_, i) => i);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = (rnd() * (i + 1)) | 0;
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, GOLD_COUNT).sort((a, b) => a - b);
+}
+
 // -------------------------------------------------------------------- State
 
 export function createRound(seed, round = 1) {
@@ -124,6 +149,7 @@ export function createRound(seed, round = 1) {
     seed,
     round,
     fog: fogFor(seed, round),
+    gold: goldFor(seed),
     board: cards.slice(0, BOARD_SIZE),
     taken: new Array(BOARD_SIZE).fill(false),
     deck: cards.slice(BOARD_SIZE, BOARD_SIZE + DECK_SIZE),
@@ -139,6 +165,9 @@ export function createRound(seed, round = 1) {
     boost: 0,
     boostT: 0,      // Zeitpunkt des letzten Boost-Updates
     lastPlayT: 0,   // Zeitpunkt der zuletzt gelegten Karte
+    golds: 0,       // eingesammelte Goldkarten
+    best: 0,        // dickster Einzelgewinn der Runde
+    risk: { used: 0, won: 0, lost: 0, done: false },
     over: false,
     finished: null, // 'clear' | 'stuck' | null
   };
@@ -157,6 +186,26 @@ export function isOpen(st, i) {
 /** Liegt die Karte in dieser Runde verdeckt? Deckt sich auf, sobald sie frei ist. */
 export function isHidden(st, i) {
   return !!st.fog && !st.taken[i] && !isOpen(st, i);
+}
+
+/** Goldkarte? Zahlt das Zehnfache und füllt die Bonusleiste komplett. */
+export function isGold(st, i) {
+  return st.gold.includes(i);
+}
+
+// ------------------------------------------------------- Multiplikator-Kette
+
+export const streakMult = (st) => Math.min(Math.max(st.streak, 1), SCORE.maxStreakMult);
+/** Jede offene Turmspitze verdoppelt: ×1 → ×2 → ×4 → ×8. */
+export const towerMult = (st) => 1 << st.peaks.filter(Boolean).length;
+export const boostMult = (st, t) => 1 + (t == null ? st.boost : boostAt(st, t)) * BOOST.maxMult;
+
+/** Was eine Karte gerade wert wäre – für die Anzeige im HUD. */
+export function mults(st, t) {
+  const streak = streakMult(st);
+  const boost = boostMult(st, t);
+  const tower = towerMult(st);
+  return { streak, boost, tower, total: streak * boost * tower };
 }
 
 /** Index der Ablage, auf die Board-Karte `i` passt – oder -1. */
@@ -251,16 +300,19 @@ export function play(st, i, t = 0) {
   drainBoost(st, t);
   feedBoost(st, t);
 
-  const mult = Math.min(st.streak, SCORE.maxStreakMult);
-  const boostMult = 1 + st.boost * BOOST.maxMult;
-  let gain = Math.round(SCORE.perCard * mult * boostMult);
+  // Goldkarte: Leiste sofort randvoll, bevor der Multiplikator gerechnet wird.
+  const gold = isGold(st, i);
+  if (gold) { st.boost = 1; st.golds++; }
+
+  const m = mults(st);
+  let gain = Math.round(SCORE.perCard * m.total) * (gold ? SCORE.goldMult : 1);
 
   const ev = {
-    type: 'play', index: i, card, slot,
-    streak: st.streak, mult, boost: st.boost, gain: 0, peaks: [],
+    type: 'play', index: i, card, slot, gold,
+    streak: st.streak, mult: m.streak, boost: st.boost, mults: m, gain: 0, peaks: [],
   };
 
-  // Turmspitze abgeräumt?
+  // Turmspitze abgeräumt? Hebt ab der nächsten Karte den Turm-Multiplikator.
   for (const p of PEAK_TIPS) {
     if (!st.peaks[p] && st.taken[p]) {
       st.peaks[p] = true;
@@ -270,6 +322,7 @@ export function play(st, i, t = 0) {
   }
 
   st.score += gain;
+  st.best = Math.max(st.best, gain);
   ev.gain = gain;
 
   const before = st.unlocked;
@@ -291,6 +344,35 @@ export function draw(st, t = 0) {
   return settle(st, { type: 'draw', card, boost: st.boost, gain: 0 });
 }
 
+// -------------------------------------------------------------- Risikoleiter
+
+/** Was beim nächsten Zug auf dem Spiel steht. */
+export function riskStake(st) {
+  return Math.round(st.score * RISK.share);
+}
+
+export function canRisk(st) {
+  return st.over && !st.risk.done && st.risk.used < RISK.steps && riskStake(st) > 0;
+}
+
+/**
+ * Einen Zug der Leiter abrechnen. Ob gewonnen wird, entscheidet **der Server** –
+ * aus dem Seed dürfte es nicht ableitbar sein, sonst wüsste der Client vorher,
+ * wann sich das Risiko lohnt.
+ */
+export function applyRisk(st, won) {
+  const stake = riskStake(st);
+  st.risk.used++;
+  if (won) { st.score += stake; st.risk.won++; } else { st.score -= stake; st.risk.lost++; }
+  if (st.risk.used >= RISK.steps) st.risk.done = true;
+  return { won, stake, score: st.score, used: st.risk.used, done: st.risk.done };
+}
+
+export function stopRisk(st) {
+  st.risk.done = true;
+  return { stopped: true, score: st.score, used: st.risk.used, done: true };
+}
+
 // ------------------------------------------------------------- Serialisierung
 
 /** Kompakter Snapshot für Resync nach einem Desync. */
@@ -309,8 +391,13 @@ export function publicStats(st) {
     streak: st.streak,
     bestStreak: st.bestStreak,
     clears: st.clears,
+    golds: st.golds,
+    best: st.best,
     left: st.taken.filter((t) => !t).length,
     over: st.over,
     finished: st.finished,
+    risking: canRisk(st),
+    riskWon: st.risk.won,
+    riskLost: st.risk.lost,
   };
 }

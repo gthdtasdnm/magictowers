@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#0a0612">
 <title>Magic Towers</title>
-<link rel="stylesheet" href="/css/style.css">
+<!-- Alle Pfade sind relativ, damit die App auch unter einem Unterordner
+     (z. B. /magictowers/ hinter einem Reverse Proxy) läuft. -->
+<link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🃏</text></svg>">
 </head>
 <body>
@@ -80,6 +82,12 @@
       <div class="score-box">
         <span class="lbl">Punkte</span>
         <b id="hud-score">0</b>
+        <div class="mults" id="mults">
+          <span class="m streak" id="m-streak">×1</span>
+          <span class="m boost" id="m-boost">×1.0</span>
+          <span class="m tower" id="m-tower">×1</span>
+          <span class="m total" id="m-total">×1</span>
+        </div>
       </div>
     </div>
     <div class="timer-wrap">
@@ -126,8 +134,23 @@
     <div class="done-box">
       <div class="done-icon" id="done-icon">🏁</div>
       <h2 id="done-title">Fertig!</h2>
-      <p class="muted" id="done-sub">Warte auf die anderen …</p>
       <div class="done-score"><span class="lbl">Deine Punkte</span><b id="done-score">0</b></div>
+
+      <div class="risk" id="risk">
+        <div class="risk-head">
+          <span class="risk-lbl">Risikoleiter</span>
+          <span class="risk-steps" id="risk-steps"></span>
+        </div>
+        <div class="risk-coin" id="risk-coin">🎲</div>
+        <p class="risk-text" id="risk-text">Die Hälfte einsetzen und verdoppeln?</p>
+        <div class="row gap">
+          <button class="btn risk-go" id="btn-risk">Risiko ▸ <b id="risk-stake">0</b></button>
+          <button class="btn" id="btn-keep">Behalten</button>
+        </div>
+        <div class="risk-timer" id="risk-timer"></div>
+      </div>
+
+      <p class="muted" id="done-sub">Warte auf die anderen …</p>
       <div class="done-list" id="done-list"></div>
     </div>
   </div>
@@ -180,13 +203,18 @@
       <li>Vor dir liegen <b>drei Pyramiden</b>. Die unterste Reihe ist offen.</li>
       <li>In der <b>Ablage</b> liegt eine Karte. Nimm vom Feld jede offene Karte, die <b>genau eins höher oder tiefer</b> ist. Ass zählt in beide Richtungen (K–A–2).</li>
       <li>Nichts passt? <b>Nachziehen</b> (Leertaste). Das killt aber deinen Streak.</li>
-      <li>Jede Karte in Folge bringt mehr: <b>10 × Streak</b>, bis zu 100 pro Karte.</li>
-      <li>Die <b>Bonusleiste</b> läuft ständig aus und füllt sich, wenn du Karte auf Karte legst. Volle Leiste = <b>doppelte Punkte</b>.</li>
+      <li>Eine Karte bringt <b>5.000 Punkte</b> – multipliziert mit der ganzen Kette:
+        <b>Streak</b> (bis ×10) × <b>Bonusleiste</b> (bis ×3) × <b>Türme</b> (bis ×8).
+        Läuft alles zusammen, sind das <b>1,2 Mio. für eine einzige Karte</b>.</li>
+      <li>Die <b>Bonusleiste</b> läuft ständig aus und füllt sich, wenn du Karte auf Karte legst. Volle Leiste = <b>dreifache Punkte</b>.</li>
+      <li>⭐ <b>Goldkarten</b> liegen bei allen an denselben drei Stellen. Wer eine legt, kassiert das <b>Zehnfache</b> und hat sofort die volle Bonusleiste.</li>
       <li>Normal liegt <b>eine</b> Ablagekarte da. Ab Streak 5 erscheint eine der zuletzt gelegten als <b>zweite</b>, ab Streak 10 eine <b>dritte</b> – dann kannst du auf alle legen. Nachziehen macht wieder eine draus.</li>
       <li>Welche Karten gerade passen, <b>zeigt dir niemand</b> – das musst du selber sehen.</li>
-      <li>Turmspitze frei: <b>+100</b>. Ganzes Board leer: <b>+300</b> plus 25 pro übriger Stapelkarte.</li>
+      <li>Turmspitze frei: <b>+500.000</b> – und der Turm-Multiplikator verdoppelt sich für alles danach.</li>
+      <li>Ganzes Board leer: <b>+2 Mio.</b> plus 150.000 pro übriger Stapelkarte. Das ist der Jackpot.</li>
       <li>Ab Runde 3 können die hinteren Karten <b>verdeckt</b> liegen – sie drehen sich um, sobald beide Karten davor weg sind. Das gilt für alle am Tisch gleich.</li>
-      <li>Board leer oder nichts mehr möglich? Dann bist du <b>durch</b> und wartest auf die anderen.</li>
+      <li>Board leer oder nichts mehr möglich? Dann bist du <b>durch</b>.</li>
+      <li>🎲 Danach kommt die <b>Risikoleiter</b>: Setz die Hälfte deiner Punkte, 50/50 – gewonnen heißt verdoppelt, verloren heißt weg. Bis zu <b>drei Sprossen</b>, du kannst jederzeit aufhören.</li>
       <li><b>75 Sekunden</b> pro Runde. Alle spielen exakt dasselbe Blatt.</li>
     </ol>
     <button class="btn primary" id="btn-rules-close">Alles klar</button>
@@ -195,6 +223,6 @@
 
 <div id="toasts"></div>
 
-<script type="module" src="/js/app.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

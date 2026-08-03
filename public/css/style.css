@@ -190,8 +190,20 @@ input:focus, select:focus { outline: none; border-color: var(--hot); box-shadow:
 .score-box .lbl { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
 .score-box b { font-size: clamp(24px, 4vw, 34px); font-weight: 900; letter-spacing: -.02em;
   font-variant-numeric: tabular-nums; }
+.score-box b { font-variant-numeric: tabular-nums; }
 .score-box b.bump { animation: bump .3s cubic-bezier(.3,1.6,.5,1); }
-@keyframes bump { 50% { transform: scale(1.22); color: var(--gold); } }
+@keyframes bump { 50% { transform: scale(1.14); color: var(--gold); } }
+
+/* Die Multiplikator-Kette: Streak × Bonusleiste × Türme */
+.mults { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
+.m { font-size: 11px; font-weight: 800; padding: 2px 6px; border-radius: 6px;
+  background: rgba(255, 255, 255, .07); color: var(--muted);
+  font-variant-numeric: tabular-nums; transition: color .2s, background .2s; }
+.m.streak.on { color: var(--hot); background: rgba(255, 46, 136, .16); }
+.m.boost.on { color: var(--cool); background: rgba(53, 230, 255, .16); }
+.m.tower.on { color: var(--good); background: rgba(82, 255, 168, .16); }
+.m.total { color: var(--gold); background: rgba(255, 212, 71, .16); font-size: 13px; }
+.m.total.big { animation: pulse .8s ease-in-out infinite; }
 
 .timer-wrap { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 130px; }
 .timer { font-size: 30px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
@@ -247,6 +259,29 @@ input:focus, select:focus { outline: none; border-color: var(--hot); box-shadow:
   box-shadow: 0 3px 10px rgba(0,0,0,.5), inset 0 0 0 1px rgba(160,120,255,.35);
   display: grid; place-items: center; color: #cbb6ff;
 }
+
+/* Goldkarten: zahlen das Zehnfache und liegen bei allen an derselben Stelle. */
+.card.gold {
+  background: linear-gradient(160deg, #fff6d4, #f5cf5a 60%, #e0a92c);
+  box-shadow: 0 3px 14px rgba(255, 190, 40, .5), inset 0 0 0 1.5px rgba(255, 245, 200, .9);
+  color: #4a2f00;
+}
+.card.gold.red { color: #a11a3a; }
+.card.gold .big { opacity: .4; color: #fff3c4; }
+.card.gold::after {
+  content: ''; position: absolute; inset: 0; border-radius: 9px; pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.75) 50%, transparent 65%);
+  background-size: 300% 100%; animation: shine 2.6s ease-in-out infinite;
+}
+@keyframes shine { 0%, 65% { background-position: 130% 0; } 100% { background-position: -30% 0; } }
+.card.back.gold-back {
+  background:
+    repeating-linear-gradient(45deg, rgba(255,220,120,.12) 0 5px, transparent 5px 10px),
+    linear-gradient(160deg, #6b4a12, #3a2708);
+  box-shadow: 0 3px 12px rgba(255, 190, 40, .35), inset 0 0 0 1px rgba(255, 212, 71, .5);
+  color: var(--gold);
+}
+.card.back.gold-back::before { content: '★'; font-size: calc(var(--card-w) * .4); opacity: .5; }
 
 .peaks .slot { position: absolute; transition: transform .3s cubic-bezier(.3,1.3,.5,1), opacity .3s; }
 .peaks .slot .card { cursor: default; transition: transform .14s, box-shadow .18s, filter .18s; }
@@ -345,6 +380,37 @@ input:focus, select:focus { outline: none; border-color: var(--hot); box-shadow:
 .overlay { position: absolute; inset: 0; display: none; place-items: center; z-index: 20;
   background: rgba(10, 6, 18, .78); backdrop-filter: blur(6px); }
 .overlay.on { display: grid; }
+/* ── Risikoleiter ──────────────────────────────────────────────────────── */
+.risk { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%;
+  padding: 14px; border-radius: 16px; border: 1px solid rgba(255, 212, 71, .35);
+  background: linear-gradient(180deg, rgba(255, 212, 71, .1), rgba(0, 0, 0, .3)); }
+.risk.off { display: none; }
+.risk.spent { border-color: var(--line); background: rgba(0, 0, 0, .3); }
+.risk-head { display: flex; align-items: center; gap: 10px; }
+.risk-lbl { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--gold); font-weight: 800; }
+.risk-steps { display: flex; gap: 4px; }
+.risk-steps i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 212, 71, .25); }
+.risk-steps i.used { background: var(--gold); }
+.risk-coin { font-size: 40px; line-height: 1; }
+.risk-coin.spin { animation: spin .45s linear infinite; }
+@keyframes spin { to { transform: rotateY(360deg) scale(1.1); } }
+.risk-text { font-size: 14px; color: var(--muted); text-align: center; min-height: 20px; }
+.risk-text b { font-size: 17px; }
+.risk-text b.win { color: var(--good); }
+.risk-text b.lose { color: var(--hot); }
+.btn.risk-go { background: linear-gradient(100deg, var(--gold), var(--hot2)); color: #2a1a00;
+  border-color: transparent; box-shadow: 0 6px 20px rgba(255, 212, 71, .35); }
+.btn.risk-go b { font-variant-numeric: tabular-nums; }
+.risk-timer { font-size: 11px; color: var(--muted); letter-spacing: .1em; min-height: 14px; }
+
+/* Münzregen bei Goldkarten, Board-Clear und gewonnenem Risiko */
+.coin { position: fixed; top: -40px; z-index: 65; pointer-events: none;
+  animation: coinfall 1.8s cubic-bezier(.4,.1,.7,1) forwards; }
+@keyframes coinfall {
+  0% { transform: translateY(0) rotate(0); opacity: 1; }
+  100% { transform: translateY(112vh) rotate(540deg); opacity: .2; }
+}
+
 /* Durch – warten, bis auch die anderen fertig sind */
 .done-box { background: var(--bg2); border: 1px solid var(--line); border-radius: 20px;
   padding: 26px 30px; text-align: center; box-shadow: var(--shadow); max-width: 400px; width: 90%;
@@ -354,7 +420,8 @@ input:focus, select:focus { outline: none; border-color: var(--hot); box-shadow:
 .done-icon { font-size: 46px; animation: bob 2.4s ease-in-out infinite; }
 .done-score { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 2px; }
 .done-score .lbl { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
-.done-score b { font-size: 40px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
+.done-score b { font-size: clamp(28px, 7vw, 40px); font-weight: 900; color: var(--gold);
+  font-variant-numeric: tabular-nums; }
 .done-list { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 .dl-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px;
   background: rgba(0, 0, 0, .3); border: 1px solid var(--line); font-size: 14px; }

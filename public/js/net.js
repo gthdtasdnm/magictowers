@@ -26,9 +26,16 @@ export function send(t, data = {}) {
 
 export function status(fn) { onStatus = fn; }
 
+/**
+ * Basispfad der Seite, z. B. `/` oder `/magictowers/`. Damit läuft die App auch
+ * in einem Unterordner hinter einem Reverse Proxy, ohne dass irgendwo ein
+ * fester Pfad einkompiliert wäre.
+ */
+export const base = location.pathname.replace(/[^/]*$/, '');
+
 export function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws = new WebSocket(`${proto}://${location.host}${base}ws`);
 
   ws.onopen = () => { tries = 0; onStatus('open'); syncClock(); emit('open', {}); };
   ws.onmessage = (e) => {

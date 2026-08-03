@@ -99,6 +99,7 @@ function route(client, msg) {
     case 'rounds': R.setRounds(client, msg.value); break;
     case 'start': R.hostStart(client); break;
     case 'move': R.move(client, msg); break;
+    case 'risk': R.risk(client, !!msg.go); break;
 
     case 'leaderboard':
       R.send(client, 'leaderboard', { top: LB.top(25), fame: LB.hallOfFame(25) });

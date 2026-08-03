@@ -1,6 +1,6 @@
 // Magic Towers – Client-Steuerung: Screens, Lobby, Raum, Runde, Auswertung.
 
-import * as E from '/shared/engine.js';
+import * as E from '../shared/engine.js';
 import * as net from './net.js';
 import * as B from './board.js';
 import { sfx, unlock as unlockAudio } from './sfx.js';
@@ -230,7 +230,11 @@ function tickLoop() {
     $('#hud-timerbar').classList.toggle('warn', pct < 25);
     if (left <= 0) round.running = false;
   }
-  B.renderBoost(st, t);
+  B.renderLive(st, t);
+  if (riskEndsAt) {
+    const left = Math.max(0, riskEndsAt - t);
+    $('#risk-timer').textContent = left > 0 ? `noch ${Math.ceil(left / 1000)} s` : '';
+  }
   requestAnimationFrame(tickLoop);
 }
 
@@ -300,19 +304,41 @@ function renderRivals() {
 
 // ── Durch: Board leer oder nichts mehr möglich – wir warten auf die anderen ──
 
+let riskEndsAt = 0;
+let riskBusy = false;
+
 function showDone() {
   if (!st?.over) return;
   const clear = st.finished === 'clear';
   $('#done-icon').textContent = clear ? '🔥' : '🏁';
   $('#done-title').textContent = clear ? 'Board leer!' : 'Nichts mehr möglich';
+  $('#risk-text').textContent = 'Die Hälfte einsetzen und verdoppeln?';
+  $('#risk-coin').textContent = '🎲';
   renderDone();
   $('#done').classList.add('on');
 }
 
-function hideDone() { $('#done').classList.remove('on'); }
+function hideDone() {
+  $('#done').classList.remove('on');
+  riskEndsAt = 0;
+  riskBusy = false;
+  $('#risk-timer').textContent = '';
+}
 
 function renderDone() {
   $('#done-score').textContent = fmt(st?.score ?? 0);
+
+  // Risikoleiter: solange noch ein Zug offen ist und etwas auf dem Konto liegt.
+  const can = st && E.canRisk(st) && !riskBusy;
+  $('#risk').classList.toggle('off', !st?.over);
+  $('#risk').classList.toggle('spent', !can && !riskBusy);
+  $('#risk-stake').textContent = fmt(st ? E.riskStake(st) : 0);
+  $('#btn-risk').disabled = !can;
+  $('#btn-keep').disabled = !can;
+  if (st?.over && !st.risk.used && !E.riskStake(st)) $('#risk-text').textContent = 'Nichts zu riskieren.';
+  $('#risk-steps').innerHTML = Array.from({ length: E.RISK.steps }, (_, i) =>
+    `<i class="${i < (st?.risk.used ?? 0) ? 'used' : ''}"></i>`).join('');
+
   const others = live.filter((p) => p.id !== me.id && p.online);
   const waiting = others.filter((p) => !p.over);
   $('#done-sub').textContent = waiting.length
@@ -322,9 +348,55 @@ function renderDone() {
     `<div class="dl-row${p.over ? ' ok' : ''}">
        <span>${esc(p.name)}</span>
        <b>${fmt(p.score)}</b>
-       <i>${p.over ? 'durch' : 'spielt noch'}</i>
+       <i>${p.risking ? '🎲 riskiert' : p.over ? 'durch' : 'spielt noch'}</i>
      </div>`).join('');
 }
+
+// Den Münzwurf macht der Server – der Client darf ihn nicht vorher kennen.
+$('#btn-risk').onclick = () => {
+  if (!st || !E.canRisk(st) || riskBusy) return;
+  riskBusy = true;
+  $('#btn-risk').disabled = true;
+  $('#btn-keep').disabled = true;
+  $('#risk-coin').classList.add('spin');
+  $('#risk-text').textContent = 'Läuft …';
+  sfx.tick(2);
+  net.send('risk', { go: true });
+};
+
+$('#btn-keep').onclick = () => {
+  if (!st || riskBusy) return;
+  net.send('risk', { go: false });
+};
+
+net.on('risk', (m) => {
+  if (!st) return;
+  st.risk.used = m.used ?? st.risk.used;
+  st.risk.done = !!m.done;
+  if (m.stopped) {
+    $('#risk-text').textContent = 'Punkte gesichert.';
+    renderDone();
+    return;
+  }
+  st.score = m.score;
+  if (m.won) st.risk.won++; else st.risk.lost++;
+
+  // Kurz die Münze drehen lassen, dann auflösen.
+  setTimeout(() => {
+    $('#risk-coin').classList.remove('spin');
+    $('#risk-coin').textContent = m.won ? '🪙' : '💀';
+    $('#risk-text').innerHTML = m.won
+      ? `<b class="win">+${fmt(m.stake)}</b> – verdoppelt!`
+      : `<b class="lose">−${fmt(m.stake)}</b> – weg.`;
+    $('#done-score').textContent = fmt(st.score);
+    B.setScore(st.score);
+    if (m.won) { sfx.win(); B.coins(); } else { sfx.bad(); }
+    riskBusy = false;
+    renderDone();
+  }, 900);
+});
+
+net.on('riskWindow', ({ endsAt }) => { riskEndsAt = endsAt; });
 
 // ─────────────────────────────────────────────────────────── Rundenende
 
