@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0a0612">
+<title>Magic Towers</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🃏</text></svg>">
+</head>
+<body>
+
+<div id="bg"><div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div></div>
+
+<!-- ─────────────────────────────────────────────  Name -->
+<section class="screen" id="s-name">
+  <div class="hero">
+    <h1 class="logo">MAGIC<span>TOWERS</span></h1>
+    <p class="tag">Drei Türme. Zehn Runden. Ein Gewinner.</p>
+  </div>
+  <div class="panel narrow">
+    <label class="field">
+      <span>Dein Name</span>
+      <input id="in-name" maxlength="16" placeholder="z.B. Ata" autocomplete="off" spellcheck="false">
+    </label>
+    <button class="btn primary big" id="btn-enter">Rein damit</button>
+    <button class="btn ghost" id="btn-lb-1">🏆 Bestenliste</button>
+    <button class="btn ghost" id="btn-rules-1">📖 Spielregeln</button>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────  Lobby -->
+<section class="screen" id="s-lobby">
+  <header class="bar">
+    <h2 class="logo sm">MAGIC<span>TOWERS</span></h2>
+    <div class="spacer"></div>
+    <button class="btn ghost sm" id="btn-lb-2">🏆</button>
+    <button class="btn ghost sm" id="btn-rules-2">📖</button>
+    <button class="btn ghost sm" id="btn-name-edit"><span id="me-name">–</span> ✎</button>
+  </header>
+
+  <div class="tables-wrap">
+    <h3>Such dir einen Tisch aus</h3>
+    <div id="room-list" class="tables"></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────  Raum -->
+<section class="screen" id="s-room">
+  <header class="bar">
+    <button class="btn ghost sm" id="btn-leave">← Verlassen</button>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="panel wide center">
+    <h2 id="room-name">Tisch</h2>
+    <p class="muted" id="room-sub">Warte auf Mitspieler …</p>
+    <div class="seats" id="seats"></div>
+    <label class="field" id="rounds-field">
+      <span>Runden</span>
+      <select id="in-rounds">
+        <option value="3">3 – kurz</option>
+        <option value="5">5 – mittel</option>
+        <option value="10" selected>10 – das volle Programm</option>
+      </select>
+    </label>
+    <div class="row gap">
+      <button class="btn big" id="btn-ready">Bereit</button>
+      <button class="btn primary big" id="btn-start">Spiel starten</button>
+    </div>
+    <p class="muted small" id="start-hint"></p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────  Spiel -->
+<section class="screen" id="s-game">
+  <header class="hud">
+    <div class="hud-l">
+      <div class="round-pill">Runde <b id="hud-round">1</b><i>/<span id="hud-rounds">10</span></i></div>
+      <div class="score-box">
+        <span class="lbl">Punkte</span>
+        <b id="hud-score">0</b>
+      </div>
+    </div>
+    <div class="timer-wrap">
+      <div class="timer" id="hud-timer">75</div>
+      <div class="timerbar"><i id="hud-timerbar"></i></div>
+    </div>
+    <div class="hud-r" id="rivals"></div>
+  </header>
+
+  <main class="table">
+    <div class="peaks-wrap">
+      <div class="peaks" id="peaks"></div>
+      <div class="fx" id="fx"></div>
+    </div>
+
+    <div class="boost-wrap">
+      <div class="boostbar" id="boost"><i id="boost-fill"></i></div>
+      <span class="boost-lbl" id="boost-lbl">Bonus ×1.0</span>
+    </div>
+
+    <div class="dock">
+      <div class="deck-area">
+        <div class="deck" id="deck" title="Nachziehen (Leertaste)">
+          <div class="card back"><span class="deck-count" id="deck-count">16</span></div>
+        </div>
+        <span class="dock-lbl">Ziehen</span>
+      </div>
+
+      <div class="slots-area">
+        <div class="slots" id="slots"></div>
+        <span class="dock-lbl" id="slot-hint">Ablage</span>
+      </div>
+
+      <div class="streak-area">
+        <div class="streak" id="streak"><b>0</b><span>Streak</span></div>
+        <span class="dock-lbl" id="streak-hint">Kombo</span>
+      </div>
+    </div>
+  </main>
+
+  <div class="overlay" id="countdown"><div class="cd-num">3</div></div>
+
+  <div class="overlay" id="done">
+    <div class="done-box">
+      <div class="done-icon" id="done-icon">🏁</div>
+      <h2 id="done-title">Fertig!</h2>
+      <p class="muted" id="done-sub">Warte auf die anderen …</p>
+      <div class="done-score"><span class="lbl">Deine Punkte</span><b id="done-score">0</b></div>
+      <div class="done-list" id="done-list"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────  Rundenende -->
+<section class="screen" id="s-round">
+  <div class="panel wide center">
+    <h2 id="re-title">Runde 1 vorbei</h2>
+    <div class="results" id="re-results"></div>
+    <h3 class="mt">Gesamtstand</h3>
+    <div class="standings" id="re-standings"></div>
+    <button class="btn primary big" id="btn-next">Bereit für die nächste Runde</button>
+    <p class="muted small" id="re-hint"></p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────  Spielende -->
+<section class="screen" id="s-end">
+  <div class="panel wide center">
+    <div class="crown">👑</div>
+    <h2 id="end-winner">Gewinner</h2>
+    <div class="results big-results" id="end-results"></div>
+    <div class="row gap">
+      <button class="btn primary big" id="btn-again">Nochmal!</button>
+      <button class="btn big" id="btn-tolobby">Zur Lobby</button>
+    </div>
+    <p class="muted small" id="end-hint"></p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────  Bestenliste -->
+<section class="screen" id="s-lb">
+  <header class="bar">
+    <button class="btn ghost sm" id="btn-lb-back">← Zurück</button>
+    <div class="spacer"></div>
+    <h2 class="logo sm">BESTEN<span>LISTE</span></h2>
+  </header>
+  <div class="lobby-grid">
+    <div class="panel"><h3>🥇 Ruhmeshalle</h3><div id="lb-fame" class="lb"></div></div>
+    <div class="panel"><h3>💥 Top-Ergebnisse</h3><div id="lb-top" class="lb"></div></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────  Regeln -->
+<div class="modal" id="m-rules">
+  <div class="modal-box">
+    <h2>So läuft's</h2>
+    <ol class="rules">
+      <li>Vor dir liegen <b>drei Pyramiden</b>. Die unterste Reihe ist offen.</li>
+      <li>In der <b>Ablage</b> liegt eine Karte. Nimm vom Feld jede offene Karte, die <b>genau eins höher oder tiefer</b> ist. Ass zählt in beide Richtungen (K–A–2).</li>
+      <li>Nichts passt? <b>Nachziehen</b> (Leertaste). Das killt aber deinen Streak.</li>
+      <li>Jede Karte in Folge bringt mehr: <b>10 × Streak</b>, bis zu 100 pro Karte.</li>
+      <li>Die <b>Bonusleiste</b> läuft ständig aus und füllt sich, wenn du Karte auf Karte legst. Volle Leiste = <b>doppelte Punkte</b>.</li>
+      <li>Normal liegt <b>eine</b> Ablagekarte da. Ab Streak 5 erscheint eine der zuletzt gelegten als <b>zweite</b>, ab Streak 10 eine <b>dritte</b> – dann kannst du auf alle legen. Nachziehen macht wieder eine draus.</li>
+      <li>Welche Karten gerade passen, <b>zeigt dir niemand</b> – das musst du selber sehen.</li>
+      <li>Turmspitze frei: <b>+100</b>. Ganzes Board leer: <b>+300</b> plus 25 pro übriger Stapelkarte.</li>
+      <li>Ab Runde 3 können die hinteren Karten <b>verdeckt</b> liegen – sie drehen sich um, sobald beide Karten davor weg sind. Das gilt für alle am Tisch gleich.</li>
+      <li>Board leer oder nichts mehr möglich? Dann bist du <b>durch</b> und wartest auf die anderen.</li>
+      <li><b>75 Sekunden</b> pro Runde. Alle spielen exakt dasselbe Blatt.</li>
+    </ol>
+    <button class="btn primary" id="btn-rules-close">Alles klar</button>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

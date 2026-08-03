@@ -1,0 +1,15 @@
+{
+  "tasks": {
+    "dev": "deno run --allow-net --allow-read --allow-write --allow-env --watch server/main.js",
+    "start": "deno run --allow-net --allow-read --allow-write --allow-env server/main.js",
+    "test": "deno test --allow-read --allow-env tests/"
+  },
+  "fmt": {
+    "lineWidth": 110,
+    "singleQuote": true,
+    "exclude": ["data/"]
+  },
+  "lint": {
+    "exclude": ["data/"]
+  }
+}
