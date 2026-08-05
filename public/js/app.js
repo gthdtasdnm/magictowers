@@ -15,9 +15,15 @@ const fmt = (n) => Number(n || 0).toLocaleString('de-DE');
 // Identität hängt am Tab (sessionStorage): Reload und Verbindungsabbruch führen
 // zurück an den Tisch, zwei Tabs sind aber zwei Spieler. Der zuletzt benutzte
 // Name aus localStorage dient nur als Vorschlag für einen frischen Tab.
+// Gemeinsamer Namensschlüssel aller vier Spiele – wer bei einem seinen Namen
+// eintippt, findet ihn beim nächsten schon vor. 'mt-name' bleibt als Rückfall,
+// damit niemand seinen alten Namen verliert.
+const NAME_KEY = 'spiele_name';
+
 const me = {
   id: sessionStorage.getItem('mt-pid') || '',
-  name: sessionStorage.getItem('mt-name') || localStorage.getItem('mt-name') || '',
+  name: sessionStorage.getItem('mt-name') || localStorage.getItem(NAME_KEY) ||
+    localStorage.getItem('mt-name') || '',
 };
 
 let room = null;          // letzter Raum-Snapshot vom Server
@@ -48,58 +54,66 @@ const avatarFor = (id) => AVATARS[[...String(id)].reduce((a, c) => a + c.charCod
 
 $('#in-name').value = me.name;
 
-function enterLobby() {
+let visibility = 'public';
+
+/** Name festhalten und am Server anmelden. Gibt false zurück, wenn er fehlt. */
+function identify() {
   const name = $('#in-name').value.trim();
-  if (!name) { $('#in-name').focus(); return toast('Wie heißt du?'); }
+  if (!name) { $('#in-name').focus(); toast('Wie heißt du?'); return false; }
   me.name = name;
   sessionStorage.setItem('mt-name', name);
-  localStorage.setItem('mt-name', name);
+  localStorage.setItem(NAME_KEY, name);
   unlockAudio();
   net.send('hello', { name, pid: me.id });
-  net.send('watchLobby');
-  $('#me-name').textContent = name;
-  show('s-lobby');
+  return true;
 }
 
-$('#btn-enter').onclick = enterLobby;
-$('#in-name').onkeydown = (e) => { if (e.key === 'Enter') enterLobby(); };
-$('#btn-name-edit').onclick = () => { $('#in-name').value = me.name; show('s-name'); };
+$('#btn-create').onclick = () => {
+  if (!identify()) return;
+  net.send('createRoom', { isPublic: visibility === 'public' });
+};
 
-// ─────────────────────────────────────────────────────────── Lobby
+function joinByCode() {
+  const code = $('#in-code').value.toUpperCase().trim();
+  if (code.length !== 4) { $('#in-code').focus(); return toast('Der Code hat vier Zeichen.'); }
+  if (!identify()) return;
+  net.send('joinRoom', { code });
+}
+$('#btn-join').onclick = joinByCode;
+$('#in-code').onkeydown = (e) => { if (e.key === 'Enter') joinByCode(); };
+$('#in-name').onkeydown = (e) => { if (e.key === 'Enter') $('#btn-create').click(); };
 
-// Es gibt vier feste Tische. Man geht einfach in einen rein – wer zuerst da ist,
-// ist Host und startet, alle anderen drücken „Bereit".
+for (const b of $$('[data-vis]')) {
+  b.onclick = () => {
+    visibility = b.dataset.vis;
+    $$('[data-vis]').forEach((x) => x.classList.toggle('sel', x === b));
+  };
+}
+
+// ─────────────────────────────────────────────────────────── Offene Tische
+
 net.on('rooms', ({ rooms }) => {
   const list = $('#room-list');
+  $('#rooms-count').textContent = rooms.length ? `(${rooms.length})` : '';
   list.innerHTML = '';
+  if (!rooms.length) {
+    list.innerHTML =
+      '<div class="rooms-empty">Gerade ist kein Tisch offen. Mach einen auf – ' +
+      'er erscheint dann bei den anderen in der Liste.</div>';
+    return;
+  }
   for (const r of rooms) {
-    const free = r.max - r.players;
-    const joinable = (r.phase === 'lobby' || r.phase === 'gameEnd') && free > 0;
-    const state = r.phase === 'lobby' || r.phase === 'gameEnd'
-      ? (free > 0 ? (r.players ? 'offen' : 'leer') : 'voll')
-      : `Runde ${r.round}/${r.rounds}`;
-
-    const d = document.createElement('div');
-    d.className = 'table-card' + (joinable ? '' : ' busy');
-    d.innerHTML =
-      `<div class="tc-head">
-         <span class="tc-name">${esc(r.name)}</span>
-         <span class="pill ${joinable ? 'open' : 'live'}">${state}</span>
-       </div>
-       <div class="tc-seats">${
-        Array.from({ length: r.max }, (_, i) => {
-          const n = r.names[i];
-          return n
-            ? `<span class="tc-seat"><i>${avatarFor(n)}</i>${esc(n)}${i === 0 ? ' 👑' : ''}</span>`
-            : '<span class="tc-seat free"><i>🪑</i>frei</span>';
-        }).join('')
-      }</div>
-       <div class="tc-foot">${r.players}/${r.max} am Tisch · ${r.rounds} Runden</div>`;
-    d.onclick = () => {
-      if (!joinable) return toast(r.phase === 'lobby' ? 'Der Tisch ist voll.' : 'Hier läuft schon eine Partie.');
+    const b = document.createElement('button');
+    b.className = 'roomrow';
+    b.innerHTML =
+      `<span class="roomrow-name">${esc(r.host ?? '?')}</span>
+       <span class="roomrow-meta">${r.players}/${r.max} · ${r.rounds} Runden</span>
+       <span class="roomrow-code">${r.code}</span>`;
+    b.onclick = () => {
+      if (!identify()) return;
       net.send('joinRoom', { code: r.code });
     };
-    list.appendChild(d);
+    list.appendChild(b);
   }
 });
 
@@ -107,7 +121,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 // ─────────────────────────────────────────────────────────── Raum
 
-$('#btn-leave').onclick = () => { net.send('leaveRoom'); room = null; show('s-lobby'); };
+$('#btn-leave').onclick = () => { net.send('leaveRoom'); room = null; show('s-name'); };
 $('#btn-ready').onclick = () => {
   const p = room?.players.find((x) => x.id === me.id);
   net.send('ready', { value: !p?.ready });
@@ -115,9 +129,27 @@ $('#btn-ready').onclick = () => {
 $('#btn-start').onclick = () => net.send('start');
 $('#in-rounds').onchange = (e) => net.send('rounds', { value: Number(e.target.value) });
 
+$('#btn-copy').onclick = async () => {
+  if (!room) return;
+  // Der Link zeigt auf den eigenen Basispfad – unter /magictowers/ genauso wie
+  // lokal auf localhost:8080. Der Pfad steht an keiner Stelle im Code.
+  const link = new URL('#' + room.code, document.baseURI).href;
+  try {
+    await navigator.clipboard.writeText(link);
+    toast('Link kopiert – schick ihn rum.');
+  } catch {
+    // Ohne Zwischenablage (kein HTTPS, alter Browser) wenigstens den Code zeigen.
+    toast(`Code: ${room.code}`);
+  }
+};
+
 function renderRoom() {
   if (!room) return;
   $('#room-name').textContent = room.name;
+  $('#room-code').textContent = room.code;
+  $('#room-vis').textContent = room.isPublic
+    ? 'Öffentlich – steht in der Liste'
+    : 'Privat – nur mit Code';
   const isHost = room.hostId === me.id;
   const meP = room.players.find((p) => p.id === me.id);
 
@@ -487,7 +519,7 @@ $('#btn-again').onclick = () => {
   $('#btn-again').textContent = next ? '✓ Bereit' : 'Nochmal!';
   $('#btn-again').classList.toggle('on', next);
 };
-$('#btn-tolobby').onclick = () => { net.send('leaveRoom'); room = null; show('s-lobby'); };
+$('#btn-tolobby').onclick = () => { net.send('leaveRoom'); room = null; show('s-name'); };
 
 function confetti() {
   const colors = ['#ff2e88', '#ffd447', '#35e6ff', '#52ffa8', '#ff8a3d'];
@@ -517,7 +549,6 @@ function confetti() {
 
 function openLB() { net.send('leaderboard'); show('s-lb'); }
 $('#btn-lb-1').onclick = openLB;
-$('#btn-lb-2').onclick = openLB;
 $('#btn-lb-back').onclick = () => show(backScreen);
 
 net.on('leaderboard', ({ top, fame }) => {
@@ -541,7 +572,6 @@ net.on('leaderboard', ({ top, fame }) => {
 
 const rules = $('#m-rules');
 $('#btn-rules-1').onclick = () => rules.classList.add('on');
-$('#btn-rules-2').onclick = () => rules.classList.add('on');
 $('#btn-rules-close').onclick = () => rules.classList.remove('on');
 rules.onclick = (e) => { if (e.target === rules) rules.classList.remove('on'); };
 
@@ -551,16 +581,15 @@ net.on('hello', (m) => {
   me.id = m.id;
   me.name = m.name;
   sessionStorage.setItem('mt-pid', m.id);
-  $('#me-name').textContent = m.name;
 });
 
 net.on('open', () => {
-  if (me.name) {
-    net.send('hello', { name: me.name, pid: me.id });
-    // Nach einem Verbindungsabriss zurück an den alten Tisch.
-    if (room) net.send('joinRoom', { code: room.code });
-    else if (!$('#s-name').classList.contains('on')) net.send('watchLobby');
-  }
+  if (me.name) net.send('hello', { name: me.name, pid: me.id });
+  // Nach einem Verbindungsabriss zurück an den alten Tisch.
+  if (room) net.send('joinRoom', { code: room.code });
+  // Die offenen Tische sind öffentlich – die will man sehen, bevor man
+  // seinen Namen eintippt, nicht erst danach.
+  else net.send('watchLobby');
 });
 
 net.status((s) => { if (s === 'closed') toast('Verbindung weg – versuche neu …'); });
@@ -569,19 +598,24 @@ document.addEventListener('pointerdown', unlockAudio, { once: true });
 
 net.connect();
 
-// Direkt an einen Tisch: /?tisch=2
-const tableParam = new URLSearchParams(location.search).get('tisch');
-const tableCode = /^[1-4]$/.test(String(tableParam)) ? `T${tableParam}` : null;
+// Geteilter Link: .../magictowers/#AB3K legt den Code ins Feld. Beigetreten
+// wird erst auf Knopfdruck – vorher fehlt ja noch der Name.
+const shared = (location.hash || '').replace('#', '').toUpperCase().trim();
+if (/^[A-Z0-9]{4}$/.test(shared)) {
+  $('#in-code').value = shared;
+  if (me.name) joinByCode();
+}
 
 show('s-name');
 
+// Name schon bekannt? Dann direkt anmelden, damit die Tischliste sofort steht.
 if (me.name) {
   $('#in-name').value = me.name;
   let bootstrapped = false;
   net.on('welcome', () => {
-    if (bootstrapped) return;   // nach einem Reconnect nicht erneut in die Lobby springen
+    if (bootstrapped) return;   // nach einem Reconnect nicht erneut anmelden
     bootstrapped = true;
-    enterLobby();
-    if (tableCode) setTimeout(() => net.send('joinRoom', { code: tableCode }), 120);
+    net.send('hello', { name: me.name, pid: me.id });
+    net.send('watchLobby');
   });
 }

@@ -92,7 +92,9 @@ function route(client, msg) {
     case 'watchLobby': R.watchLobby(client); break;
     case 'unwatchLobby': R.unwatchLobby(client); break;
 
+    case 'createRoom': R.createRoom(client, msg.isPublic !== false); break;
     case 'joinRoom': R.joinRoom(client, msg.code); break;
+    case 'visibility': R.setVisibility(client, !!msg.isPublic); break;
     case 'leaveRoom': R.leaveRoom(client); R.watchLobby(client); break;
 
     case 'ready': R.setReady(client, msg.value); break;

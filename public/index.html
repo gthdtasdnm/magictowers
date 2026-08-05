@@ -14,8 +14,10 @@
 
 <div id="bg"><div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div></div>
 
-<!-- ─────────────────────────────────────────────  Name -->
-<section class="screen" id="s-name">
+<!-- ─────────────────────────────────────────────  Start -->
+<!-- .on steht schon im Markup: sonst ist die Seite bis zum Start von
+     app.js leer, und genau das sieht man beim ersten Laden. -->
+<section class="screen on" id="s-name">
   <div class="hero">
     <h1 class="logo">MAGIC<span>TOWERS</span></h1>
     <p class="tag">Drei Türme. Zehn Runden. Ein Gewinner.</p>
@@ -23,27 +25,33 @@
   <div class="panel narrow">
     <label class="field">
       <span>Dein Name</span>
-      <input id="in-name" maxlength="16" placeholder="z.B. Ata" autocomplete="off" spellcheck="false">
+      <input id="in-name" maxlength="16" placeholder="z. B. Ata" autocomplete="nickname" spellcheck="false">
     </label>
-    <button class="btn primary big" id="btn-enter">Rein damit</button>
-    <button class="btn ghost" id="btn-lb-1">🏆 Bestenliste</button>
-    <button class="btn ghost" id="btn-rules-1">📖 Spielregeln</button>
-  </div>
-</section>
 
-<!-- ─────────────────────────────────────────────  Lobby -->
-<section class="screen" id="s-lobby">
-  <header class="bar">
-    <h2 class="logo sm">MAGIC<span>TOWERS</span></h2>
-    <div class="spacer"></div>
-    <button class="btn ghost sm" id="btn-lb-2">🏆</button>
-    <button class="btn ghost sm" id="btn-rules-2">📖</button>
-    <button class="btn ghost sm" id="btn-name-edit"><span id="me-name">–</span> ✎</button>
-  </header>
+    <div class="setting">
+      <span class="setting-label">Sichtbar</span>
+      <div class="segmented">
+        <button class="seg sel" data-vis="public">Öffentlich</button>
+        <button class="seg" data-vis="private">Privat</button>
+      </div>
+    </div>
+    <button class="btn primary big" id="btn-create">Tisch aufmachen</button>
 
-  <div class="tables-wrap">
-    <h3>Such dir einen Tisch aus</h3>
-    <div id="room-list" class="tables"></div>
+    <div class="or"><span>oder beitreten</span></div>
+
+    <div class="rooms-head">Offene Tische <span id="rooms-count"></span></div>
+    <div id="room-list" class="roomlist"></div>
+
+    <div class="joinrow">
+      <input id="in-code" maxlength="4" placeholder="CODE" autocapitalize="characters"
+             autocomplete="off" spellcheck="false">
+      <button class="btn" id="btn-join">Mit Code</button>
+    </div>
+
+    <div class="row gap">
+      <button class="btn ghost small" id="btn-lb-1">🏆 Bestenliste</button>
+      <button class="btn ghost small" id="btn-rules-1">📖 Spielregeln</button>
+    </div>
   </div>
 </section>
 
@@ -55,6 +63,13 @@
   </header>
 
   <div class="panel wide center">
+    <div class="codebox">
+      <span class="codebox-label">Tischcode</span>
+      <strong id="room-code">····</strong>
+      <span id="room-vis" class="codebox-vis"></span>
+      <button class="btn ghost small" id="btn-copy">Link kopieren</button>
+    </div>
+
     <h2 id="room-name">Tisch</h2>
     <p class="muted" id="room-sub">Warte auf Mitspieler …</p>
     <div class="seats" id="seats"></div>

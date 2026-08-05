@@ -12,13 +12,8 @@ const MIN_PLAYERS = 2;
 /** So weit darf die vom Client gemeldete Zugzeit von der Serveruhr abweichen. */
 const TIME_SLACK_MS = 1500;
 
-/** Die vier festen Tische. Sie existieren immer und werden nie gelöscht. */
-const TABLES = [
-  { code: 'T1', name: 'Tisch 1' },
-  { code: 'T2', name: 'Tisch 2' },
-  { code: 'T3', name: 'Tisch 3' },
-  { code: 'T4', name: 'Tisch 4' },
-];
+/** Ohne I, O, 0 und 1 – die sind auf einem Handydisplay nicht zu unterscheiden. */
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /** @type {Map<string, Room>} */
 const rooms = new Map();
@@ -27,10 +22,21 @@ const lobbyWatchers = new Set();
 /** Spieler-ID → Raumcode, damit ein Reload zurück an den Tisch führt. */
 const homes = new Map();
 
-for (const t of TABLES) {
-  rooms.set(t.code, {
-    code: t.code,
-    name: t.name,
+function newCode() {
+  for (let i = 0; i < 500; i++) {
+    let c = '';
+    for (let k = 0; k < 4; k++) c += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+    if (!rooms.has(c)) return c;
+  }
+  return 'T' + Date.now().toString(36).slice(-3).toUpperCase();
+}
+
+/** Neuen Tisch aufmachen. Wer ihn aufmacht, ist Host. */
+export function createRoom(client, isPublic = true) {
+  if (client.room) leaveRoom(client);
+  const room = {
+    code: newCode(),
+    isPublic: !!isPublic,
     hostId: null,
     players: [],
     phase: 'lobby',
@@ -41,7 +47,19 @@ for (const t of TABLES) {
     endsAt: 0,
     riskAt: 0,
     timers: [],
-  });
+  };
+  rooms.set(room.code, room);
+  joinRoom(client, room.code);
+  return room;
+}
+
+/** Sichtbarkeit umstellen – nur der Host, nur solange nicht gespielt wird. */
+export function setVisibility(client, isPublic) {
+  const room = client.room;
+  if (!room || room.hostId !== client.id || room.phase !== 'lobby') return;
+  room.isPublic = !!isPublic;
+  syncRoom(room);
+  pushLobby();
 }
 
 // --------------------------------------------------------------- Hilfsmittel
@@ -70,7 +88,7 @@ export function rank(list, key = 'score') {
 function roomSummary(r) {
   return {
     code: r.code,
-    name: r.name,
+    name: tableName(r),
     players: r.players.length,
     max: MAX_PLAYERS,
     phase: r.phase,
@@ -81,8 +99,27 @@ function roomSummary(r) {
   };
 }
 
+/** Der Tisch heißt nach dem, der ihn aufgemacht hat. */
+function tableName(r) {
+  const host = r.players.find((p) => p.id === r.hostId)?.name;
+  return host ? `${host}s Tisch` : `Tisch ${r.code}`;
+}
+
+/**
+ * Was auf der Startseite steht: offene, öffentliche Tische, an denen noch
+ * jemand sitzt. Gezählt wird nach *anwesenden* Spielern – sonst steht ein
+ * verwaister Tisch noch in der Liste und zeigt dabei „0/4".
+ */
 export function lobbyList() {
-  return TABLES.map((t) => roomSummary(rooms.get(t.code)));
+  return [...rooms.values()]
+    .filter((r) =>
+      r.isPublic &&
+      (r.phase === 'lobby' || r.phase === 'gameEnd') &&
+      r.players.length > 0 && r.players.length < MAX_PLAYERS &&
+      r.players.some((p) => p.online)
+    )
+    .map(roomSummary)
+    .sort((a, b) => b.players - a.players);
 }
 
 function pushLobby() {
@@ -234,22 +271,19 @@ function clearTimers(room) {
   room.timers = [];
 }
 
-/** Tisch zurück auf Anfang – er bleibt bestehen, nur leer. */
+/** Leerer Tisch wird abgeräumt. Dynamische Räume überleben ihre Gäste nicht. */
 function resetTable(room) {
   clearTimers(room);
   room.players.length = 0;
   room.hostId = null;
-  room.phase = 'lobby';
-  room.round = 0;
-  room.totalRounds = E.ROUNDS;
-  room.seed = null;
-  room.riskAt = 0;
+  rooms.delete(room.code);
 }
 
 function roomState(room) {
   return {
     code: room.code,
-    name: room.name,
+    name: tableName(room),
+    isPublic: room.isPublic,
     hostId: room.hostId,
     phase: room.phase,
     round: room.round,
@@ -454,7 +488,7 @@ function endRound(room, aborted = false) {
     const final = rank(room.players
       .map((p) => ({ id: p.id, name: p.name, score: p.total, rounds: p.rounds, bestStreak: p.bestStreak, clears: p.clears, golds: p.golds, best: p.best }))
       .sort((a, b) => b.score - a.score));
-    if (!aborted && final.length >= MIN_PLAYERS) LB.record(final, room.name);
+    if (!aborted && final.length >= MIN_PLAYERS) LB.record(final, tableName(room));
     broadcast(room, 'gameEnd', { results: final, aborted });
   } else {
     broadcast(room, 'roundEnd', { round: room.round, totalRounds: room.totalRounds, results, standings });
@@ -496,4 +530,4 @@ export function move(client, msg) {
   }
 }
 
-export { MAX_PLAYERS, MIN_PLAYERS, TABLES };
+export { MAX_PLAYERS, MIN_PLAYERS };

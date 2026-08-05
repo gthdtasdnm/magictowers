@@ -1,4 +1,10 @@
-/* ══════════════════════════════ Magic Towers ══════════════════════════════ */
+/* ══════════════ Gemeinsame Lobby-Basis ══════════════ Anfang ═══════════════
+   Identisch in PickUp, Magic Towers, Reflex Royale und Double. Wer hier etwas
+   ändert, ändert es in allen vier – der Block wird von Hand synchron gehalten,
+   es gibt bewusst keinen Build-Schritt.
+
+   --akzent/--akzent2 setzt jedes Spiel darunter selbst; alles andere ist gleich.
+   ────────────────────────────────────────────────────────────────────────── */
 
 :root {
   --bg: #0a0612;
@@ -12,13 +18,215 @@
   --cool: #35e6ff;
   --gold: #ffd447;
   --good: #52ffa8;
+  --bad: #ff4d5e;
+  --r: 14px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .55);
+
+  /* Voreinstellung, wird je Spiel überschrieben */
+  --akzent: var(--hot);
+  --akzent2: var(--gold);
+}
+
+/* Screens: beide Schaltklassen, damit jedes Spiel seinen bisherigen
+   Umschalter behalten kann (.on in Magic Towers, .active in den anderen). */
+.screen.on, .screen.active, .view.active { display: flex; }
+
+/* ── Typo ─────────────────────────────────────────────────────────────── */
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.center { text-align: center; }
+.spacer { flex: 1; }
+.row { display: flex; align-items: center; }
+.row.gap { gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+.logo {
+  font-size: clamp(38px, 8vw, 76px); font-weight: 900;
+  letter-spacing: -.03em; line-height: .92; text-align: center;
+  background: linear-gradient(100deg, #fff 10%, var(--akzent) 45%, var(--akzent2) 95%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 4px 24px rgba(255, 46, 136, .35));
+}
+.logo span {
+  display: block;
+  background: linear-gradient(100deg, var(--cool), #a06bff);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.logo.sm { font-size: 20px; line-height: 1; }
+.logo.sm span { display: inline; }
+.tag {
+  color: var(--muted); margin-top: 10px; font-size: 15px;
+  letter-spacing: .12em; text-transform: uppercase; text-align: center;
+}
+
+/* ── Panels ───────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
+  padding: 24px; backdrop-filter: blur(14px); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 12px; width: 100%;
+}
+.panel.narrow { max-width: 380px; }
+.panel.wide { max-width: 700px; }
+
+/* ── Formulare ────────────────────────────────────────────────────────── */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field span {
+  font-size: 12px; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--muted);
+}
+input, select {
+  background: rgba(0, 0, 0, .35); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 12px; padding: 13px 15px; font-family: inherit; width: 100%;
+  /* 16px ist Pflicht: darunter zoomt iOS Safari beim Fokus in das Feld hinein. */
+  font-size: 16px;
+  transition: border-color .15s, box-shadow .15s;
+}
+input:focus, select:focus {
+  outline: none; border-color: var(--akzent);
+  box-shadow: 0 0 0 3px rgba(255, 46, 136, .18);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+.btn {
+  border: 1px solid var(--line); background: rgba(255, 255, 255, .06); color: var(--ink);
+  border-radius: 12px; padding: 13px 18px; font-size: 15px; font-weight: 700;
+  font-family: inherit; cursor: pointer; user-select: none;
+  transition: transform .12s, filter .15s, background .15s;
+}
+.btn:hover { background: rgba(255, 255, 255, .12); }
+.btn:active { transform: scale(.96); }
+.btn.big { padding: 16px 26px; font-size: 17px; }
+/* .sm und .small sind dasselbe – die vier Spiele hatten je eine der beiden
+   Schreibweisen, beide bleiben gültig, damit kein Markup umgeschrieben wird. */
+.btn.sm, .btn.small { padding: 8px 12px; font-size: 13px; width: auto; }
+.btn.ghost { background: transparent; }
+.btn.primary {
+  background: linear-gradient(100deg, var(--akzent), var(--akzent2));
+  border-color: transparent; color: #180a12;
+  box-shadow: 0 6px 22px rgba(255, 46, 136, .3);
+}
+.btn.primary:hover { filter: brightness(1.12); }
+.btn.on { background: linear-gradient(100deg, #1ec98a, var(--good)); color: #04220f; border-color: transparent; }
+.btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+
+/* ── Trenner „oder beitreten" ─────────────────────────────────────────── */
+.or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+/* ── Einstellungszeile: Beschriftung links, Schalter rechts ───────────── */
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.setting-label {
+  font-size: 12px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .12em;
+}
+
+/* ── Sichtbarkeit: Öffentlich | Privat ────────────────────────────────── */
+.segmented {
+  display: flex; gap: 4px; padding: 4px;
+  background: rgba(0, 0, 0, .35); border: 1px solid var(--line); border-radius: 12px;
+}
+.seg {
+  flex: 1; border: 0; background: transparent; color: var(--muted);
+  font: 700 14px/1 inherit; font-family: inherit; padding: 10px 8px;
+  border-radius: 9px; cursor: pointer; transition: background .15s, color .15s;
+}
+.seg.sel { background: rgba(255, 255, 255, .1); color: var(--ink); }
+
+/* ── Raumcode + Teilen ────────────────────────────────────────────────── */
+.codebox {
+  text-align: center; background: var(--panel);
+  border: 2px dashed var(--line); border-radius: var(--r); padding: 16px;
+}
+.codebox-label {
+  display: block; font-size: 11px; letter-spacing: .18em;
+  color: var(--muted); text-transform: uppercase;
+}
+.codebox strong {
+  display: block; font-size: clamp(34px, 11vw, 46px); font-weight: 900;
+  letter-spacing: .22em; color: var(--gold); margin: 4px 0 10px;
+  /* Der Code wird abgetippt und vorgelesen – Ziffern gleich breit. */
+  font-variant-numeric: tabular-nums;
+}
+.codebox-vis { display: block; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.codebox .btn { margin: 0 auto; }
+
+.joinrow { display: flex; gap: 10px; }
+.joinrow input { text-align: center; letter-spacing: .3em; font-weight: 800; }
+.joinrow .btn { width: auto; flex: 0 0 auto; }
+
+/* ── Offene Räume ─────────────────────────────────────────────────────── */
+.rooms-head {
+  font-size: 13px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.rooms-head span { color: var(--cool); }
+.roomlist { display: flex; flex-direction: column; gap: 8px; }
+.rooms-empty {
+  font-size: 13px; color: var(--muted); line-height: 1.45;
+  padding: 12px 14px; border: 2px dashed var(--line); border-radius: var(--r);
+}
+.roomrow {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center; gap: 10px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 12px 14px;
+  cursor: pointer; text-align: left; color: inherit;
+  font-family: inherit; font-size: 15px;
+  transition: transform .14s, border-color .15s, background .15s;
+}
+.roomrow:hover { transform: translateY(-2px); border-color: var(--akzent); background: rgba(255, 46, 136, .1); }
+.roomrow:active { transform: scale(.98); }
+.roomrow-name { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roomrow-meta { font-size: 12px; color: var(--muted); }
+.roomrow-code { font-weight: 900; letter-spacing: .12em; color: var(--gold); font-variant-numeric: tabular-nums; }
+.roomrow-count { font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
+
+.pill {
+  font-size: 11px; padding: 3px 9px; border-radius: 99px;
+  background: rgba(255, 255, 255, .1); letter-spacing: .06em;
+  text-transform: uppercase; white-space: nowrap;
+}
+.pill.live { background: rgba(255, 46, 136, .22); color: var(--hot); }
+.pill.open { background: rgba(82, 255, 168, .18); color: var(--good); }
+
+/* ── Warteraum: Sitze ─────────────────────────────────────────────────── */
+/* 110px, nicht 140: bei 360px Displaybreite bleiben nach Screen- und
+   Panel-Polsterung nur ~276px übrig – mit 140px stünden die Sitze
+   untereinander und der Warteraum wäre doppelt so hoch. */
+.seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin: 8px 0 4px; }
+.seat {
+  border: 1px solid var(--line); border-radius: 16px; padding: 16px 12px;
+  text-align: center; background: rgba(0, 0, 0, .28);
+  transition: border-color .2s, box-shadow .2s;
+}
+.seat.ready { border-color: var(--good); box-shadow: 0 0 0 3px rgba(82, 255, 168, .12); }
+.seat.off { opacity: .45; }
+.seat .av { font-size: 30px; }
+.seat .nm { font-weight: 800; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat .st { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.seat.ready .st { color: var(--good); }
+.seat .host { font-size: 11px; color: var(--gold); letter-spacing: .1em; }
+.seat.empty { border-style: dashed; opacity: .4; }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn, .roomrow, .seat { transition: none; }
+  /* Auch Einblend-Animationen aus: sie starten bei opacity 0, und wer
+     Bewegung abgeschaltet hat, soll den Inhalt sofort sehen – nicht erst
+     nach der Animation. Nebenbei trifft so auch der Layout-Screenshot
+     nicht mehr Frame 0. */
+  .screen, .screen.on { animation: none !important; }
+}
+
+/* ══════════════ Gemeinsame Lobby-Basis ══════════════ Ende ═════════════════ */
+
+/* Magic Towers: eigener Akzent + was nur dieses Spiel braucht. */
+:root {
+  --akzent: var(--hot);
+  --akzent2: var(--gold);
   /* Das Board ist exakt 10 Karten breit und 3.31 Karten hoch. Die Kartengröße
      leitet sich daher direkt aus dem Viewport ab – so passt es auf jedem Gerät
      ohne Überlauf, vom Handy bis zum Barmonitor. */
   --card-w: min(82px, (100vw - 20px) / 10, (100vh - 200px) / 4.8);
   --card-h: calc(var(--card-w) * 1.41);
-  --r: 14px;
-  --shadow: 0 10px 30px rgba(0, 0, 0, .55);
   font-synthesis: none;
 }
 
@@ -48,124 +256,36 @@ body { overscroll-behavior: none; }
 /* ── Screens ───────────────────────────────────────────────────────────── */
 .screen {
   position: fixed; inset: 0; display: none;
-  flex-direction: column; align-items: center; justify-content: center;
-  gap: 22px; padding: 18px; padding-top: max(18px, env(safe-area-inset-top));
+  flex-direction: column; align-items: center;
+  /* „safe center": mittig, solange es passt – wird der Inhalt höher als der
+     Bildschirm, rutscht er nach oben statt oben UND unten abgeschnitten zu
+     werden. Ohne das safe war die Kopfzeile im Warteraum nicht erreichbar. */
+  justify-content: safe center;
+  gap: 22px; padding: 18px;
+  padding-top: max(18px, env(safe-area-inset-top));
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
   overflow-y: auto;
 }
+/* display muss hier stehen, nicht nur in der Basis: die .screen-Regel darüber
+   kommt später als der gemeinsame Block und würde sonst display:none gewinnen. */
 .screen.on { display: flex; animation: fadein .28s ease; }
 @keyframes fadein { from { opacity: 0; transform: translateY(8px); } }
 
-/* ── Typo / Logo ───────────────────────────────────────────────────────── */
-.logo {
-  font-size: clamp(38px, 8vw, 76px); font-weight: 900; letter-spacing: -.03em; line-height: .92;
-  background: linear-gradient(100deg, #fff 10%, var(--hot) 45%, var(--hot2) 70%, var(--gold) 95%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 4px 24px rgba(255, 46, 136, .45));
-  text-align: center;
-}
-.logo span { display: block; background: linear-gradient(100deg, var(--cool), #a06bff);
-  -webkit-background-clip: text; background-clip: text; color: transparent; }
-.logo.sm { font-size: 20px; line-height: 1; }
-.logo.sm span { display: inline; }
 .hero { text-align: center; }
-.tag { color: var(--muted); margin-top: 10px; font-size: 15px; letter-spacing: .12em; text-transform: uppercase; }
 h2 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
 h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); margin-bottom: 12px; }
 h3.mt { margin-top: 22px; }
-.muted { color: var(--muted); }
-.small { font-size: 13px; }
-.center { text-align: center; }
-.spacer { flex: 1; }
-.row { display: flex; align-items: center; }
-.row.gap { gap: 10px; flex-wrap: wrap; justify-content: center; }
 
-/* ── Panels ────────────────────────────────────────────────────────────── */
-.panel {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
-  padding: 24px; backdrop-filter: blur(14px); box-shadow: var(--shadow);
-  display: flex; flex-direction: column; gap: 12px; width: 100%;
-}
-.panel.narrow { max-width: 380px; }
-.panel.wide { max-width: 700px; }
 .lobby-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 16px; width: 100%; max-width: 900px; }
 
-/* ── Formulare ─────────────────────────────────────────────────────────── */
-.field { display: flex; flex-direction: column; gap: 6px; }
-.field span { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
-input, select {
-  background: rgba(0, 0, 0, .35); border: 1px solid var(--line); color: var(--ink);
-  border-radius: 12px; padding: 13px 15px; font-size: 16px; font-family: inherit; width: 100%;
-  transition: border-color .15s, box-shadow .15s;
-}
-input:focus, select:focus { outline: none; border-color: var(--hot); box-shadow: 0 0 0 3px rgba(255, 46, 136, .18); }
 .check { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 14px; cursor: pointer; }
 .check input { width: 18px; height: 18px; accent-color: var(--hot); }
 
-/* ── Buttons ───────────────────────────────────────────────────────────── */
-.btn {
-  border: 1px solid var(--line); background: rgba(255, 255, 255, .06); color: var(--ink);
-  border-radius: 12px; padding: 13px 18px; font-size: 15px; font-weight: 700; font-family: inherit;
-  cursor: pointer; transition: transform .12s, filter .15s, background .15s; user-select: none;
-}
-.btn:hover { background: rgba(255, 255, 255, .12); }
-.btn:active { transform: scale(.96); }
-.btn.big { padding: 16px 26px; font-size: 17px; }
-.btn.sm { padding: 8px 12px; font-size: 13px; }
-.btn.ghost { background: transparent; }
-.btn.primary {
-  background: linear-gradient(100deg, var(--hot), var(--hot2)); border-color: transparent; color: #fff;
-  box-shadow: 0 6px 22px rgba(255, 46, 136, .35);
-}
-.btn.primary:hover { filter: brightness(1.12); }
-.btn.on { background: linear-gradient(100deg, #1ec98a, var(--good)); color: #04220f; border-color: transparent; }
-.btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
-
-/* ── Bars ──────────────────────────────────────────────────────────────── */
 .bar { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 900px;
   position: sticky; top: 0; padding-bottom: 4px; }
 
-/* ── Raum / Sitze ──────────────────────────────────────────────────────── */
-.seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 8px 0 4px; }
-.seat {
-  border: 1px solid var(--line); border-radius: 16px; padding: 16px 12px; text-align: center;
-  background: rgba(0, 0, 0, .28); transition: border-color .2s, box-shadow .2s;
-}
-.seat.ready { border-color: var(--good); box-shadow: 0 0 0 3px rgba(82, 255, 168, .12); }
-.seat.off { opacity: .45; }
-.seat .av { font-size: 30px; }
-.seat .nm { font-weight: 800; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.seat .st { font-size: 12px; color: var(--muted); margin-top: 3px; }
-.seat.ready .st { color: var(--good); }
-.seat .host { font-size: 11px; color: var(--gold); letter-spacing: .1em; }
-.seat.empty { border-style: dashed; opacity: .4; }
 #rounds-field { max-width: 260px; align-self: center; align-items: center; }
-
-/* ── Die vier Tische ───────────────────────────────────────────────────── */
-.tables-wrap { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 4px; }
-.tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
-.table-card {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px;
-  backdrop-filter: blur(14px); box-shadow: var(--shadow); cursor: pointer;
-  display: flex; flex-direction: column; gap: 10px;
-  transition: transform .14s, border-color .15s, background .15s;
-}
-.table-card:hover { transform: translateY(-3px); border-color: var(--hot); background: rgba(255, 46, 136, .1); }
-.table-card:active { transform: scale(.98); }
-.table-card.busy { cursor: not-allowed; opacity: .55; }
-.table-card.busy:hover { transform: none; border-color: var(--line); background: var(--panel); }
-.tc-head { display: flex; align-items: center; gap: 10px; }
-.tc-name { font-size: 19px; font-weight: 800; flex: 1; }
-.tc-seats { display: flex; flex-direction: column; gap: 5px; }
-.tc-seat { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tc-seat i { font-style: normal; font-size: 17px; width: 22px; text-align: center; }
-.tc-seat.free { color: var(--muted); font-weight: 400; opacity: .55; }
-.tc-foot { font-size: 12px; color: var(--muted); }
-.pill { font-size: 11px; padding: 3px 9px; border-radius: 99px; background: rgba(255, 255, 255, .1);
-  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
-.pill.live { background: rgba(255, 46, 136, .22); color: var(--hot); }
-.pill.open { background: rgba(82, 255, 168, .18); color: var(--good); }
 
 /* ══════════════════════════ SPIELTISCH ══════════════════════════════════ */
 #s-game { justify-content: flex-start; gap: 0; padding: 0; }
