@@ -40,6 +40,13 @@ function show(id) {
   if (id !== 's-lb') backScreen = id;
 }
 
+/** Zurück auf die Startseite. Der Code muss aus der Adresse, sonst zieht ein
+ *  Neuladen einen wieder an den gerade verlassenen Tisch. */
+function leaveToStart() {
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  show('s-name');
+}
+
 function toast(msg) {
   const t = document.createElement('div');
   t.className = 'toast';
@@ -121,7 +128,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 // ─────────────────────────────────────────────────────────── Raum
 
-$('#btn-leave').onclick = () => { net.send('leaveRoom'); room = null; show('s-name'); };
+$('#btn-leave').onclick = () => { net.send('leaveRoom'); room = null; leaveToStart(); };
 $('#btn-ready').onclick = () => {
   const p = room?.players.find((x) => x.id === me.id);
   net.send('ready', { value: !p?.ready });
@@ -519,7 +526,7 @@ $('#btn-again').onclick = () => {
   $('#btn-again').textContent = next ? '✓ Bereit' : 'Nochmal!';
   $('#btn-again').classList.toggle('on', next);
 };
-$('#btn-tolobby').onclick = () => { net.send('leaveRoom'); room = null; show('s-name'); };
+$('#btn-tolobby').onclick = () => { net.send('leaveRoom'); room = null; leaveToStart(); };
 
 function confetti() {
   const colors = ['#ff2e88', '#ffd447', '#35e6ff', '#52ffa8', '#ff8a3d'];
@@ -587,6 +594,10 @@ net.on('open', () => {
   if (me.name) net.send('hello', { name: me.name, pid: me.id });
   // Nach einem Verbindungsabriss zurück an den alten Tisch.
   if (room) net.send('joinRoom', { code: room.code });
+  // Über einen geteilten Link gekommen und der Name ist schon bekannt? Dann
+  // ohne Umweg an den Tisch. Nur beim ersten Verbinden – wer den Tisch später
+  // verlässt, soll nicht bei jedem Reconnect wieder hineingezogen werden.
+  else if (pendingJoin) { net.send('joinRoom', { code: pendingJoin }); pendingJoin = null; }
   // Die offenen Tische sind öffentlich – die will man sehen, bevor man
   // seinen Namen eintippt, nicht erst danach.
   else net.send('watchLobby');
@@ -596,26 +607,38 @@ net.status((s) => { if (s === 'closed') toast('Verbindung weg – versuche neu �
 
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 
-net.connect();
-
-// Geteilter Link: .../magictowers/#AB3K legt den Code ins Feld. Beigetreten
-// wird erst auf Knopfdruck – vorher fehlt ja noch der Name.
+// ─────────────────────────────────────────────────── Geteilter Link
+// .../magictowers/#AB3K – der Link ist die ganze Interaktion. Wer ihn öffnet,
+// soll am Tisch landen und ihn nicht erst in einer Liste suchen müssen. Ist
+// der Name schon bekannt, passiert das ohne einen Klick.
 const shared = (location.hash || '').replace('#', '').toUpperCase().trim();
-if (/^[A-Z0-9]{4}$/.test(shared)) {
-  $('#in-code').value = shared;
-  if (me.name) joinByCode();
-}
+const sharedCode = /^[A-Z0-9]{4}$/.test(shared) ? shared : null;
 
-show('s-name');
+/** Startseite auf „du bist eingeladen" umstellen: eine Frage, ein Knopf. */
+function invitationMode() {
+  if (!sharedCode) return;
+  $('#in-code').value = sharedCode;
+  const tag = document.querySelector('#s-name .tag');
+  if (tag) tag.textContent = `Du bist eingeladen – Tisch ${sharedCode}.`;
 
-// Name schon bekannt? Dann direkt anmelden, damit die Tischliste sofort steht.
-if (me.name) {
-  $('#in-name').value = me.name;
-  let bootstrapped = false;
-  net.on('welcome', () => {
-    if (bootstrapped) return;   // nach einem Reconnect nicht erneut anmelden
-    bootstrapped = true;
-    net.send('hello', { name: me.name, pid: me.id });
-    net.send('watchLobby');
+  // Den Knopf austauschen statt umbeschriften: sonst bliebe der alte
+  // Klick-Handler dran und würde zusätzlich einen neuen Tisch aufmachen.
+  const alt = $('#btn-create');
+  const btn = alt.cloneNode(true);
+  btn.textContent = 'Beitreten';
+  alt.replaceWith(btn);
+  btn.addEventListener('click', () => {
+    if (identify()) net.send('joinRoom', { code: sharedCode });
   });
 }
+
+// Beigetreten wird erst, wenn die Verbindung wirklich steht (net.on('open')) –
+// vorher fiele die Nachricht lautlos unter den Tisch. Genau daran ist der
+// Beitritt per Link bisher gescheitert.
+let pendingJoin = sharedCode && me.name ? sharedCode : null;
+
+invitationMode();
+show('s-name');
+if (me.name) $('#in-name').value = me.name;
+
+net.connect();

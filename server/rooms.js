@@ -13,12 +13,23 @@ const MIN_PLAYERS = 2;
 const TIME_SLACK_MS = 1500;
 
 /**
- * Karenzzeit: so lange bleibt ein Platz reserviert, wenn die Verbindung weg ist.
- * Wer den Link teilt, wechselt dabei zwangsläufig die App – auf dem Handy stirbt
- * dabei der Socket. Ohne diese Reserve löst sich der eigene Tisch genau in dem
- * Moment auf, in dem man ihn herumschickt. Gleicher Wert in allen vier Spielen.
+ * Zwei verschiedene Dinge, die man leicht verwechselt:
+ *
+ * ROOM_IDLE_MS – so lange bleibt ein *Tisch* offen, an dem gerade niemand
+ *   sitzt. Das ist der Puffer fürs Link-Teilen: dafür muss man den Tab
+ *   verlassen, und auf dem Handy stirbt dabei der Socket. Der Tisch steht
+ *   weiter, wer zurückkommt, setzt sich einfach wieder hin. In der Tischliste
+ *   taucht er nicht auf, solange niemand da ist – nur Code und Link führen hin.
+ *
+ * SEAT_GRACE_MS – so lange bleibt ein *Platz* reserviert. Das braucht es nur
+ *   während einer laufenden Partie, weil dort Punkte am Platz hängen. In der
+ *   Lobby hängt daran nichts, also wird der Platz sofort frei – ein Sitz, auf
+ *   dem sichtbar niemand sitzt, verwirrt nur.
+ *
+ * Gleiche Werte und gleiche Regel in allen vier Spielen.
  */
-const REJOIN_MS = 60_000;
+const ROOM_IDLE_MS = 5 * 60_000;
+const SEAT_GRACE_MS = 60_000;
 
 /** Ohne I, O, 0 und 1 – die sind auf einem Handydisplay nicht zu unterscheiden. */
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -55,10 +66,26 @@ export function createRoom(client, isPublic = true) {
     endsAt: 0,
     riskAt: 0,
     timers: [],
+    idleTimer: null,     // läuft, solange niemand am Tisch sitzt
   };
   rooms.set(room.code, room);
   joinRoom(client, room.code);
   return room;
+}
+
+/**
+ * Ein Tisch, an dem niemand mehr sitzt, wird nicht sofort abgeräumt – sonst
+ * wäre er genau dann weg, wenn man gerade den Link verschickt.
+ */
+function scheduleIdleClose(room) {
+  if (room.idleTimer) clearTimeout(room.idleTimer);
+  room.idleTimer = setTimeout(() => {
+    if (room.players.length === 0) resetTable(room);
+  }, ROOM_IDLE_MS);
+}
+
+function cancelIdleClose(room) {
+  if (room.idleTimer) { clearTimeout(room.idleTimer); room.idleTimer = null; }
 }
 
 /** Sichtbarkeit umstellen – nur der Host, nur solange nicht gespielt wird. */
@@ -165,6 +192,7 @@ export function unwatchLobby(client) {
 export function joinRoom(client, code) {
   const room = rooms.get(String(code ?? '').toUpperCase().trim());
   if (!room) return send(client, 'error', { msg: 'Diesen Tisch gibt es nicht.' });
+  cancelIdleClose(room);
 
   // Rückkehrer bekommen ihren Platz zurück.
   const existing = room.players.find((p) => p.id === client.id);
@@ -266,10 +294,19 @@ export function markOffline(client) {
   p.ready = false;
   p.client = null;
   client.room = null;
-  ensureHost(room);
 
+  // In der Lobby wird der Platz sofort frei – dort hängt nichts daran, und ein
+  // Sitz mit niemandem drauf verwirrt die anderen nur. Der Tisch bleibt
+  // trotzdem stehen, wer zurückkommt, setzt sich einfach wieder hin.
+  if (room.phase === 'lobby' || room.phase === 'gameEnd') {
+    releaseSeat(room, p.id);
+    return;
+  }
+
+  // Während einer Partie hängen Punkte am Platz, also bleibt er reserviert.
+  ensureHost(room);
   if (p.dropTimer) clearTimeout(p.dropTimer);
-  p.dropTimer = setTimeout(() => releaseSeat(room, p.id), REJOIN_MS);
+  p.dropTimer = setTimeout(() => releaseSeat(room, p.id), SEAT_GRACE_MS);
 
   syncRoom(room);
   pushLobby();
@@ -287,19 +324,18 @@ function releaseSeat(room, id) {
   homes.delete(id);
 
   if (room.players.length === 0) {
-    resetTable(room);
+    // Niemand mehr da: der Tisch bleibt eine Weile stehen, fängt aber von vorn
+    // an. In der Tischliste steht er nicht – nur Code und Link führen hin.
+    resetGame(room);
+    scheduleIdleClose(room);
     pushLobby();
     return;
   }
   ensureHost(room);
-  // Wenn nur noch einer da ist, hat eine laufende Partie keinen Sinn mehr.
-  if (room.players.filter((x) => x.online).length < MIN_PLAYERS &&
-    (room.phase === 'playing' || room.phase === 'countdown')) {
-    endRound(room, true);
-  } else {
-    checkAllReady(room);
-    syncRoom(room);
-  }
+  // Kein Abbruch mehr, wenn zu wenige übrig sind: wer bleibt, spielt die Partie
+  // zu Ende und kommt damit auch in die Bestenliste.
+  checkAllReady(room);
+  syncRoom(room);
   pushLobby();
 }
 
@@ -312,6 +348,7 @@ function clearTimers(room) {
 /** Leerer Tisch wird abgeräumt. Dynamische Räume überleben ihre Gäste nicht. */
 function resetTable(room) {
   clearTimers(room);
+  cancelIdleClose(room);
   for (const p of room.players) {
     if (p.dropTimer) clearTimeout(p.dropTimer);
     homes.delete(p.id);
@@ -370,9 +407,15 @@ export function setRounds(client, n) {
   pushLobby();
 }
 
+/**
+ * Zwischen den Runden reicht es, dass alle Anwesenden bereit sind. Hier wird
+ * bewusst nicht auf MIN_PLAYERS geprüft – wer als Einziger übrig bleibt, soll
+ * die angefangene Partie zu Ende spielen und in die Bestenliste kommen. Zum
+ * *Starten* braucht es weiterhin zwei (siehe hostStart).
+ */
 function checkAllReady(room) {
   const active = room.players.filter((p) => p.online);
-  if (active.length < MIN_PLAYERS) return;
+  if (!active.length) return;
   if (!active.every((p) => p.ready)) return;
 
   if (room.phase === 'roundEnd') startRound(room);
@@ -530,7 +573,9 @@ function endRound(room, aborted = false) {
     const final = rank(room.players
       .map((p) => ({ id: p.id, name: p.name, score: p.total, rounds: p.rounds, bestStreak: p.bestStreak, clears: p.clears, golds: p.golds, best: p.best }))
       .sort((a, b) => b.score - a.score));
-    if (!aborted && final.length >= MIN_PLAYERS) LB.record(final, tableName(room));
+    // Auch eine allein zu Ende gespielte Partie zählt – sonst verliert genau
+    // der seinen Eintrag, dem die Mitspieler weggelaufen sind.
+    if (!aborted && final.length) LB.record(final, tableName(room));
     broadcast(room, 'gameEnd', { results: final, aborted });
   } else {
     broadcast(room, 'roundEnd', { round: room.round, totalRounds: room.totalRounds, results, standings });
