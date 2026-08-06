@@ -12,6 +12,14 @@ const MIN_PLAYERS = 2;
 /** So weit darf die vom Client gemeldete Zugzeit von der Serveruhr abweichen. */
 const TIME_SLACK_MS = 1500;
 
+/**
+ * Karenzzeit: so lange bleibt ein Platz reserviert, wenn die Verbindung weg ist.
+ * Wer den Link teilt, wechselt dabei zwangsläufig die App – auf dem Handy stirbt
+ * dabei der Socket. Ohne diese Reserve löst sich der eigene Tisch genau in dem
+ * Moment auf, in dem man ihn herumschickt. Gleicher Wert in allen vier Spielen.
+ */
+const REJOIN_MS = 60_000;
+
 /** Ohne I, O, 0 und 1 – die sind auf einem Handydisplay nicht zu unterscheiden. */
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -75,6 +83,20 @@ function broadcast(room, type, data = {}) {
   for (const p of room.players) send(p.client, type, data);
 }
 
+/**
+ * Der Host ist immer jemand, der auch da ist. Geht er raus oder ist seine
+ * Verbindung weg, rückt der nächste Anwesende nach – sonst steht der Tisch ohne
+ * Host da und niemand kann die Partie starten.
+ */
+function ensureHost(room) {
+  const current = room.players.find((p) => p.id === room.hostId);
+  if (current?.online) return;
+  // Ist gerade niemand da, behält der erste Platz den Namen des Tisches;
+  // sobald jemand zurückkommt, greift diese Funktion erneut.
+  const next = room.players.find((p) => p.online) ?? room.players[0];
+  room.hostId = next ? next.id : null;
+}
+
 /** Plätze vergeben – gleicher Score heißt gleicher Platz. Liste muss sortiert sein. */
 export function rank(list, key = 'score') {
   list.forEach((r, i) => {
@@ -89,7 +111,9 @@ function roomSummary(r) {
   return {
     code: r.code,
     name: tableName(r),
-    players: r.players.length,
+    // Anwesende, nicht belegte Plätze: ein reservierter Platz gehört noch
+    // jemandem, sitzt aber gerade niemand drauf.
+    players: r.players.filter((p) => p.online).length,
     max: MAX_PLAYERS,
     phase: r.phase,
     round: r.round,
@@ -146,13 +170,16 @@ export function joinRoom(client, code) {
   const existing = room.players.find((p) => p.id === client.id);
   if (existing) {
     if (client.room && client.room !== room) leaveRoom(client);
+    if (existing.dropTimer) { clearTimeout(existing.dropTimer); existing.dropTimer = null; }
     existing.client = client;
     existing.online = true;
     existing.name = client.name;
     client.room = room;
     homes.set(client.id, room.code);
     unwatchLobby(client);
+    ensureHost(room);
     syncRoom(room);
+    pushLobby();
     if (room.phase === 'playing' || room.phase === 'countdown') sendRoundStart(room, existing, true);
     return;
   }
@@ -168,6 +195,7 @@ export function joinRoom(client, code) {
     name: client.name,
     client,
     online: true,
+    dropTimer: null,
     ready: false,
     st: null,
     total: 0,
@@ -178,7 +206,7 @@ export function joinRoom(client, code) {
     best: 0,
   });
   // Wer als Erster am Tisch sitzt, ist Host und startet die Partie.
-  if (!room.hostId || !room.players.some((p) => p.id === room.hostId)) room.hostId = client.id;
+  ensureHost(room);
   client.room = room;
   homes.set(client.id, room.code);
   unwatchLobby(client);
@@ -214,30 +242,19 @@ export function renamed(client) {
   pushLobby();
 }
 
+/** Der Knopf „Tisch verlassen" ist eine Entscheidung – da gibt es keine Karenzzeit. */
 export function leaveRoom(client) {
   const room = client.room;
   if (!room) return;
   client.room = null;
-  homes.delete(client.id);
-  const i = room.players.findIndex((p) => p.id === client.id);
-  if (i >= 0) room.players.splice(i, 1);
-
-  if (room.players.length === 0) {
-    resetTable(room);
-  } else {
-    if (room.hostId === client.id) room.hostId = room.players[0].id;
-    // Wenn nur noch einer da ist, hat eine laufende Partie keinen Sinn mehr.
-    if (room.players.length < MIN_PLAYERS && (room.phase === 'playing' || room.phase === 'countdown')) {
-      endRound(room, true);
-    } else {
-      checkAllReady(room);
-      syncRoom(room);
-    }
-  }
-  pushLobby();
+  releaseSeat(room, client.id);
 }
 
-/** Verbindung weg – Platz bleibt reserviert, damit man zurückkommen kann. */
+/**
+ * Verbindung weg – Platz bleibt reserviert, damit man zurückkommen kann. Das
+ * gilt in *jeder* Phase, auch in der Lobby: wer den Raumlink verschickt, ist
+ * dabei zwangsläufig kurz aus dem Tab raus.
+ */
 export function markOffline(client) {
   const room = client.room;
   unwatchLobby(client);
@@ -245,24 +262,45 @@ export function markOffline(client) {
   const p = room.players.find((x) => x.id === client.id);
   if (!p) return;
 
-  if (room.phase === 'lobby' || room.phase === 'gameEnd') {
-    leaveRoom(client);
-    return;
-  }
   p.online = false;
   p.ready = false;
+  p.client = null;
   client.room = null;
-  syncRoom(room);
+  ensureHost(room);
 
-  // Niemand mehr online? Dann macht die Partie keinen Sinn mehr.
-  if (room.players.every((x) => !x.online)) {
-    for (const x of room.players) homes.delete(x.id);
-    room.players.length = 0;
+  if (p.dropTimer) clearTimeout(p.dropTimer);
+  p.dropTimer = setTimeout(() => releaseSeat(room, p.id), REJOIN_MS);
+
+  syncRoom(room);
+  pushLobby();
+  // Ein Abwesender darf eine laufende Runde nicht bis zum Timer aufhalten.
+  maybeEndRound(room);
+}
+
+/** Platz endgültig freigeben – nach Ablauf der Karenzzeit oder auf Knopfdruck. */
+function releaseSeat(room, id) {
+  const i = room.players.findIndex((p) => p.id === id);
+  if (i < 0) return;
+  const p = room.players[i];
+  if (p.dropTimer) { clearTimeout(p.dropTimer); p.dropTimer = null; }
+  room.players.splice(i, 1);
+  homes.delete(id);
+
+  if (room.players.length === 0) {
     resetTable(room);
     pushLobby();
-  } else {
-    maybeEndRound(room);
+    return;
   }
+  ensureHost(room);
+  // Wenn nur noch einer da ist, hat eine laufende Partie keinen Sinn mehr.
+  if (room.players.filter((x) => x.online).length < MIN_PLAYERS &&
+    (room.phase === 'playing' || room.phase === 'countdown')) {
+    endRound(room, true);
+  } else {
+    checkAllReady(room);
+    syncRoom(room);
+  }
+  pushLobby();
 }
 
 function clearTimers(room) {
@@ -274,6 +312,10 @@ function clearTimers(room) {
 /** Leerer Tisch wird abgeräumt. Dynamische Räume überleben ihre Gäste nicht. */
 function resetTable(room) {
   clearTimers(room);
+  for (const p of room.players) {
+    if (p.dropTimer) clearTimeout(p.dropTimer);
+    homes.delete(p.id);
+  }
   room.players.length = 0;
   room.hostId = null;
   rooms.delete(room.code);
