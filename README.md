@@ -1,8 +1,7 @@
-# 🃏 Magic Towers
+# 🃏 Card Chaos
 
-Ein schnelles Mehrspieler-Kartenspiel für 2–4 Leute, inspiriert vom Klassiker an den
-Fun4Four-Tischen in der Shishabar. Drei Pyramiden, ein Timer, zehn Runden – wer am
-schnellsten Ketten baut, gewinnt.
+Ein schnelles Mehrspieler-Kartenspiel für 2–4 Leute. Drei Pyramiden, ein Timer,
+zehn Runden – wer am schnellsten Ketten baut, gewinnt.
 
 Läuft komplett auf **Deno**, ohne eine einzige externe Abhängigkeit. Kein Build-Schritt,
 kein `node_modules`, ein Prozess.
@@ -158,31 +157,31 @@ deno --version
 ### 2. Code hochladen
 
 ```bash
-ssh user@inf-zeus.de 'sudo mkdir -p /opt/magictowers && sudo chown $USER /opt/magictowers'
-rsync -av --exclude data/ --exclude .git/ ./ user@inf-zeus.de:/opt/magictowers/
+ssh user@inf-zeus.de 'sudo mkdir -p /opt/cardchaos && sudo chown $USER /opt/cardchaos'
+rsync -av --exclude data/ --exclude .git/ ./ user@inf-zeus.de:/opt/cardchaos/
 ```
 
 Oder direkt vom Repo aus – dann ist ein Update später nur `git pull` plus Neustart:
 
 ```bash
 ssh user@inf-zeus.de
-sudo git clone https://github.com/gthdtasdnm/magictowers.git /opt/magictowers
+sudo git clone https://github.com/gthdtasdnm/cardchaos.git /opt/cardchaos
 ```
 
 ### 3. Dauerhaft laufen lassen (PM2)
 
-Läuft auf demselben Server schon PM2 (z. B. für PickUp), kommt Magic Towers einfach
+Läuft auf demselben Server schon PM2 (z. B. für Keep), kommt Card Chaos einfach
 daneben. Deno ist kein JS-Skript, deshalb `--interpreter none` und die Argumente
 hinter `--`:
 
 ```bash
-cd /opt/magictowers
-PORT=8080 HOST=127.0.0.1 MT_DATA=/opt/magictowers/data/leaderboard.json \
-pm2 start /usr/local/bin/deno --name magictowers --interpreter none --cwd /opt/magictowers -- \
+cd /opt/cardchaos
+PORT=8080 HOST=127.0.0.1 MT_DATA=/opt/cardchaos/data/leaderboard.json \
+pm2 start /usr/local/bin/deno --name cardchaos --interpreter none --cwd /opt/cardchaos -- \
   run --allow-net --allow-read --allow-write --allow-env server/main.js
 
 pm2 save
-pm2 logs magictowers
+pm2 logs cardchaos
 ```
 
 `pm2 startup` muss nur einmal pro Server laufen – ist das für ein anderes Projekt
@@ -190,7 +189,7 @@ schon passiert, reicht hier `pm2 save`.
 
 Zwei Dinge, die man leicht übersieht:
 
-- **Port frei wählen.** Läuft PickUp auf 3000, nimm für Magic Towers 8080 (so steht es
+- **Port frei wählen.** Läuft Keep auf 3000, nimm für Card Chaos 8080 (so steht es
   auch in der Apache-Config unten). Zwei Dienste auf demselben Port starten nicht.
 - **`HOST=127.0.0.1`** – sonst hängt der Deno-Prozess offen im Netz und man käme unter
   Umgehung von Apache direkt auf `inf-zeus.de:8080`.
@@ -198,26 +197,26 @@ Zwei Dinge, die man leicht übersieht:
 Update später:
 
 ```bash
-cd /opt/magictowers && git pull && pm2 restart magictowers
+cd /opt/cardchaos && git pull && pm2 restart cardchaos
 ```
 
 <details>
 <summary>Alternative: systemd statt PM2</summary>
 
-`/etc/systemd/system/magictowers.service`:
+`/etc/systemd/system/cardchaos.service`:
 
 ```ini
 [Unit]
-Description=Magic Towers
+Description=Card Chaos
 After=network.target
 
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/opt/magictowers
+WorkingDirectory=/opt/cardchaos
 Environment=PORT=8080
 Environment=HOST=127.0.0.1
-Environment=MT_DATA=/var/lib/magictowers/leaderboard.json
+Environment=MT_DATA=/var/lib/cardchaos/leaderboard.json
 ExecStart=/usr/local/bin/deno run --allow-net --allow-read --allow-write --allow-env server/main.js
 Restart=always
 RestartSec=3
@@ -227,10 +226,10 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-sudo mkdir -p /var/lib/magictowers && sudo chown www-data /var/lib/magictowers
+sudo mkdir -p /var/lib/cardchaos && sudo chown www-data /var/lib/cardchaos
 sudo systemctl daemon-reload
-sudo systemctl enable --now magictowers
-sudo journalctl -u magictowers -f
+sudo systemctl enable --now cardchaos
+sudo journalctl -u cardchaos -f
 ```
 
 </details>
@@ -239,7 +238,7 @@ sudo journalctl -u magictowers -f
 
 Die App hängt an **keinem** festen Pfad: alle Verweise im HTML sind relativ und die
 WebSocket-URL wird aus `location.pathname` gebaut. Sie läuft deshalb genauso unter
-`/` wie unter `/magictowers/`. Apache schneidet das Präfix beim Weiterleiten ab, der
+`/` wie unter `/cardchaos/`. Apache schneidet das Präfix beim Weiterleiten ab, der
 Deno-Prozess sieht also immer nur Wurzelpfade.
 
 Module aktivieren – `proxy_wstunnel` ist der entscheidende:
@@ -254,15 +253,15 @@ In den vorhandenen vHost von `inf-zeus.de`:
 ```apache
 # WebSocket MUSS zuerst stehen – Apache nimmt die erste passende Regel,
 # und die allgemeine unten würde den Upgrade-Handshake verschlucken.
-ProxyPass        /magictowers/ws  ws://127.0.0.1:8080/ws
-ProxyPassReverse /magictowers/ws  ws://127.0.0.1:8080/ws
+ProxyPass        /cardchaos/ws  ws://127.0.0.1:8080/ws
+ProxyPassReverse /cardchaos/ws  ws://127.0.0.1:8080/ws
 
-ProxyPass        /magictowers/    http://127.0.0.1:8080/
-ProxyPassReverse /magictowers/    http://127.0.0.1:8080/
+ProxyPass        /cardchaos/    http://127.0.0.1:8080/
+ProxyPassReverse /cardchaos/    http://127.0.0.1:8080/
 
 # Ohne den Slash am Ende wäre der Basispfad "/" und die relativen Pfade
 # (css/style.css …) würden auf inf-zeus.de/css/style.css zeigen.
-RedirectMatch ^/magictowers$ /magictowers/
+RedirectMatch ^/cardchaos$ /cardchaos/
 ```
 
 ```bash
@@ -273,15 +272,15 @@ Die drei Fallstricke in genau dieser Reihenfolge:
 
 1. **`proxy_wstunnel` fehlt** → die Verbindung bricht sofort ab, das Spiel hängt in
    der Lobby. Das ist der Klassiker.
-2. **`/magictowers/ws` steht nach der allgemeinen Regel** → gleicher Effekt, weil der
+2. **`/cardchaos/ws` steht nach der allgemeinen Regel** → gleicher Effekt, weil der
    Upgrade als normales HTTP weitergereicht wird.
-3. **Der Redirect auf den Schrägstrich fehlt** → wer `inf-zeus.de/magictowers` ohne
+3. **Der Redirect auf den Schrägstrich fehlt** → wer `inf-zeus.de/cardchaos` ohne
    Slash aufruft, bekommt eine Seite ohne CSS und ohne JavaScript.
 
 Läuft der vHost schon über HTTPS (certbot), ist nichts weiter zu tun – der Client
 schaltet automatisch auf `wss://`.
 
-Danach: `https://inf-zeus.de/magictowers/` – und `?tisch=2` führt direkt an Tisch 2.
+Danach: `https://inf-zeus.de/cardchaos/` – und `?tisch=2` führt direkt an Tisch 2.
 
 **Anderer Pfad?** Nur die vier Zeilen oben anpassen, im Code ist nichts zu ändern.
 

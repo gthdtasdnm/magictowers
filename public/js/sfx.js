@@ -2,7 +2,7 @@
 
 let ctx = null;
 let master = null;
-export let muted = localStorage.getItem('mt-mute') === '1';
+export let muted = localStorage.getItem('cc-mute') === '1';
 
 function ac() {
   if (!ctx) {
@@ -19,7 +19,7 @@ export function unlock() { try { ac(); } catch { /* noop */ } }
 
 export function toggleMute() {
   muted = !muted;
-  localStorage.setItem('mt-mute', muted ? '1' : '0');
+  localStorage.setItem('cc-mute', muted ? '1' : '0');
   return muted;
 }
 

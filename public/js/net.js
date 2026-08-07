@@ -27,7 +27,7 @@ export function send(t, data = {}) {
 export function status(fn) { onStatus = fn; }
 
 /**
- * Basispfad der Seite, z. B. `/` oder `/magictowers/`. Damit läuft die App auch
+ * Basispfad der Seite, z. B. `/` oder `/cardchaos/`. Damit läuft die App auch
  * in einem Unterordner hinter einem Reverse Proxy, ohne dass irgendwo ein
  * fester Pfad einkompiliert wäre.
  */

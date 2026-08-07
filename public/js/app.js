@@ -1,4 +1,4 @@
-// Magic Towers – Client-Steuerung: Screens, Lobby, Raum, Runde, Auswertung.
+// Card Chaos – Client-Steuerung: Screens, Lobby, Raum, Runde, Auswertung.
 
 import * as E from '../shared/engine.js';
 import * as net from './net.js';
@@ -16,14 +16,12 @@ const fmt = (n) => Number(n || 0).toLocaleString('de-DE');
 // zurück an den Tisch, zwei Tabs sind aber zwei Spieler. Der zuletzt benutzte
 // Name aus localStorage dient nur als Vorschlag für einen frischen Tab.
 // Gemeinsamer Namensschlüssel aller vier Spiele – wer bei einem seinen Namen
-// eintippt, findet ihn beim nächsten schon vor. 'mt-name' bleibt als Rückfall,
-// damit niemand seinen alten Namen verliert.
+// eintippt, findet ihn beim nächsten schon vor.
 const NAME_KEY = 'spiele_name';
 
 const me = {
-  id: sessionStorage.getItem('mt-pid') || '',
-  name: sessionStorage.getItem('mt-name') || localStorage.getItem(NAME_KEY) ||
-    localStorage.getItem('mt-name') || '',
+  id: sessionStorage.getItem('cc-pid') || '',
+  name: sessionStorage.getItem('cc-name') || localStorage.getItem(NAME_KEY) || '',
 };
 
 let room = null;          // letzter Raum-Snapshot vom Server
@@ -68,7 +66,7 @@ function identify() {
   const name = $('#in-name').value.trim();
   if (!name) { $('#in-name').focus(); toast('Wie heißt du?'); return false; }
   me.name = name;
-  sessionStorage.setItem('mt-name', name);
+  sessionStorage.setItem('cc-name', name);
   localStorage.setItem(NAME_KEY, name);
   unlockAudio();
   net.send('hello', { name, pid: me.id });
@@ -138,7 +136,7 @@ $('#in-rounds').onchange = (e) => net.send('rounds', { value: Number(e.target.va
 
 $('#btn-copy').onclick = async () => {
   if (!room) return;
-  // Der Link zeigt auf den eigenen Basispfad – unter /magictowers/ genauso wie
+  // Der Link zeigt auf den eigenen Basispfad – unter /cardchaos/ genauso wie
   // lokal auf localhost:8080. Der Pfad steht an keiner Stelle im Code.
   const link = new URL('#' + room.code, document.baseURI).href;
   try {
@@ -587,7 +585,7 @@ rules.onclick = (e) => { if (e.target === rules) rules.classList.remove('on'); }
 net.on('hello', (m) => {
   me.id = m.id;
   me.name = m.name;
-  sessionStorage.setItem('mt-pid', m.id);
+  sessionStorage.setItem('cc-pid', m.id);
 });
 
 net.on('open', () => {
@@ -608,7 +606,7 @@ net.status((s) => { if (s === 'closed') toast('Verbindung weg – versuche neu �
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 
 // ─────────────────────────────────────────────────── Geteilter Link
-// .../magictowers/#AB3K – der Link ist die ganze Interaktion. Wer ihn öffnet,
+// .../cardchaos/#AB3K – der Link ist die ganze Interaktion. Wer ihn öffnet,
 // soll am Tisch landen und ihn nicht erst in einer Liste suchen müssen. Ist
 // der Name schon bekannt, passiert das ohne einen Klick.
 const shared = (location.hash || '').replace('#', '').toUpperCase().trim();

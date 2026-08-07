@@ -1,4 +1,4 @@
-// Magic Towers – HTTP + WebSocket Server (Deno, ohne Abhängigkeiten).
+// Card Chaos – HTTP + WebSocket Server (Deno, ohne Abhängigkeiten).
 
 import * as R from './rooms.js';
 import * as LB from './leaderboard.js';
@@ -114,7 +114,7 @@ function route(client, msg) {
 // -------------------------------------------------------------------- Server
 
 Deno.serve({ port: PORT, hostname: HOST, onListen: ({ hostname, port }) => {
-  console.log(`\n  🃏  Magic Towers läuft auf http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}\n`);
+  console.log(`\n  🃏  Card Chaos läuft auf http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}\n`);
 } }, async (req) => {
   const url = new URL(req.url);
 

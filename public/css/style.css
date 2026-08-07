@@ -1,5 +1,5 @@
 /* ══════════════ Gemeinsame Lobby-Basis ══════════════ Anfang ═══════════════
-   Identisch in PickUp, Magic Towers, Reflex Royale und Double. Wer hier etwas
+   Identisch in Keep, Card Chaos, Lucky Reflex und Seconds. Wer hier etwas
    ändert, ändert es in allen vier – der Block wird von Hand synchron gehalten,
    es gibt bewusst keinen Build-Schritt.
 
@@ -28,7 +28,7 @@
 }
 
 /* Screens: beide Schaltklassen, damit jedes Spiel seinen bisherigen
-   Umschalter behalten kann (.on in Magic Towers, .active in den anderen). */
+   Umschalter behalten kann (.on in Card Chaos, .active in den anderen). */
 .screen.on, .screen.active, .view.active { display: flex; }
 
 /* ── Typo ─────────────────────────────────────────────────────────────── */
@@ -218,7 +218,7 @@ input:focus, select:focus {
 
 /* ══════════════ Gemeinsame Lobby-Basis ══════════════ Ende ═════════════════ */
 
-/* Magic Towers: eigener Akzent + was nur dieses Spiel braucht. */
+/* Card Chaos: eigener Akzent + was nur dieses Spiel braucht. */
 :root {
   --akzent: var(--hot);
   --akzent2: var(--gold);

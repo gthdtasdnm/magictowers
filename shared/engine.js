@@ -1,4 +1,4 @@
-// Magic Towers – Spiel-Engine.
+// Card Chaos – Spiel-Engine.
 // Läuft identisch im Browser und in Deno. Alles ist deterministisch aus dem Seed
 // und den mitgelieferten Zeitstempeln ableitbar, damit der Server jeden Zug
 // nachrechnen kann.
