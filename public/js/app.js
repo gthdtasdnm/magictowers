@@ -393,12 +393,22 @@ function renderDone() {
   $('#done-sub').textContent = waiting.length
     ? `Warte auf ${waiting.map((p) => p.name).join(', ')} …`
     : 'Alle durch – gleich gibt es die Auswertung.';
-  $('#done-list').innerHTML = others.map((p) =>
-    `<div class="dl-row${p.over ? ' ok' : ''}">
+  $('#done-list').innerHTML = others.map((p) => {
+    // `risking` ist canRisk() vom Server und heisst "darf noch riskieren" –
+    // nicht "hat riskiert". Es steht schon auf true, sobald jemand seine Runde
+    // mit Punkten beendet hat. Ob wirklich gewuerfelt wurde, sagen erst
+    // riskWon/riskLost.
+    const gewagt = (p.riskWon ?? 0) + (p.riskLost ?? 0);
+    const stand = !p.over ? 'spielt noch'
+      : gewagt ? `🎲 ${gewagt}× riskiert`
+      : p.risking ? 'an der Leiter'
+      : 'durch';
+    return `<div class="dl-row${p.over ? ' ok' : ''}">
        <span>${esc(p.name)}</span>
        <b>${fmt(p.score)}</b>
-       <i>${p.risking ? '🎲 riskiert' : p.over ? 'durch' : 'spielt noch'}</i>
-     </div>`).join('');
+       <i>${stand}</i>
+     </div>`;
+  }).join('');
 }
 
 // Den Münzwurf macht der Server – der Client darf ihn nicht vorher kennen.
