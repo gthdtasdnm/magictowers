@@ -2,6 +2,14 @@
 
 import * as R from './rooms.js';
 import * as LB from './leaderboard.js';
+import {
+  absender,
+  darfRaumOeffnen,
+  darfVerbinden,
+  raumVermerkt,
+  verbindungAuf,
+  verbindungZu,
+} from './bremse.js';
 
 const PORT = Number(Deno.env.get('PORT') ?? 8080);
 const HOST = Deno.env.get('HOST') ?? '0.0.0.0';
@@ -50,11 +58,17 @@ async function serveFile(pathname) {
 let nextConn = 1;
 const clients = new Set();
 
-function handleSocket(socket) {
+function handleSocket(socket, ip) {
   /** @type {any} */
-  const client = { id: null, name: 'Gast', socket, room: null, conn: nextConn++ };
+  const client = { id: null, name: 'Gast', socket, room: null, conn: nextConn++, ip };
+
+  // Erst zaehlen, wenn die Verbindung wirklich steht, und genau einmal wieder
+  // freigeben - sonst sperrt sich die IP mit der Zeit selbst aus.
+  let gezaehlt = false;
 
   socket.onopen = () => {
+    gezaehlt = true;
+    verbindungAuf(ip);
     clients.add(client);
     R.send(client, 'welcome', { serverTime: Date.now() });
   };
@@ -66,6 +80,7 @@ function handleSocket(socket) {
   };
 
   const close = () => {
+    if (gezaehlt) { gezaehlt = false; verbindungZu(ip); }
     clients.delete(client);
     R.markOffline(client);
   };
@@ -92,7 +107,15 @@ function route(client, msg) {
     case 'watchLobby': R.watchLobby(client); break;
     case 'unwatchLobby': R.unwatchLobby(client); break;
 
-    case 'createRoom': R.createRoom(client, msg.isPublic !== false); break;
+    case 'createRoom': {
+      if (!darfRaumOeffnen(client.ip)) {
+        R.send(client, 'error', { msg: 'Zu viele Tische in kurzer Zeit. Warte kurz.' });
+        break;
+      }
+      raumVermerkt(client.ip);
+      R.createRoom(client, msg.isPublic !== false);
+      break;
+    }
     case 'joinRoom': R.joinRoom(client, msg.code); break;
     case 'visibility': R.setVisibility(client, !!msg.isPublic); break;
     case 'leaveRoom': R.leaveRoom(client); R.watchLobby(client); break;
@@ -115,15 +138,21 @@ function route(client, msg) {
 
 Deno.serve({ port: PORT, hostname: HOST, onListen: ({ hostname, port }) => {
   console.log(`\n  🃏  Card Chaos läuft auf http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}\n`);
-} }, async (req) => {
+} }, async (req, info) => {
   const url = new URL(req.url);
 
   if (url.pathname === '/ws') {
     if (req.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
       return new Response('WebSocket erwartet', { status: 400 });
     }
+    const ip = absender(req, info);
+    if (!darfVerbinden(ip)) {
+      // 429 statt stiller Ablehnung: der Client soll den Unterschied zwischen
+      // "Server kaputt" und "du warst zu schnell" sehen koennen.
+      return new Response('Zu viele Verbindungen', { status: 429 });
+    }
     const { socket, response } = Deno.upgradeWebSocket(req);
-    handleSocket(socket);
+    handleSocket(socket, ip);
     return response;
   }
 
