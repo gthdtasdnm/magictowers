@@ -21,6 +21,9 @@ const NAME_KEY = 'spiele_name';
 
 const me = {
   id: sessionStorage.getItem('cc-pid') || '',
+  // Geheimer Ausweis zur pid. Die pid allein ist kein Nachweis - sie steht
+  // bei allen Mitspielern im Tischzustand.
+  token: sessionStorage.getItem('cc-token') || '',
   name: sessionStorage.getItem('cc-name') || localStorage.getItem(NAME_KEY) || '',
 };
 
@@ -69,7 +72,7 @@ function identify() {
   sessionStorage.setItem('cc-name', name);
   localStorage.setItem(NAME_KEY, name);
   unlockAudio();
-  net.send('hello', { name, pid: me.id });
+  net.send('hello', { name, pid: me.id, token: me.token });
   return true;
 }
 
@@ -596,10 +599,11 @@ net.on('hello', (m) => {
   me.id = m.id;
   me.name = m.name;
   sessionStorage.setItem('cc-pid', m.id);
+  if (m.token) { me.token = m.token; sessionStorage.setItem('cc-token', m.token); }
 });
 
 net.on('open', () => {
-  if (me.name) net.send('hello', { name: me.name, pid: me.id });
+  if (me.name) net.send('hello', { name: me.name, pid: me.id, token: me.token });
   // Nach einem Verbindungsabriss zurück an den alten Tisch.
   if (room) net.send('joinRoom', { code: room.code });
   // Über einen geteilten Link gekommen und der Name ist schon bekannt? Dann

@@ -88,19 +88,82 @@ function handleSocket(socket, ip) {
   socket.onerror = close;
 }
 
+/** Einmal anlegen, nicht bei jedem Namen neu - das Ding ist teuer. */
+const ZEICHEN = new Intl.Segmenter('de', { granularity: 'grapheme' });
+
+/**
+ * Namen entschaerfen: Steuerzeichen raus, dann auf sechzehn *Zeichen*
+ * kuerzen - nicht auf sechzehn UTF-16-Einheiten. Ein Emoji besteht aus
+ * zweien, `slice(0, 16)` schnitt es mittendurch und liess ein
+ * Ersatzzeichen stehen. Zweite Grenze bei 64 Einheiten gegen gestapelte
+ * Kombinationszeichen, abgebrochen wird zwischen zwei Zeichen.
+ * Gleiche Fassung wie `cleanName` in gemeinsam/raum.js, nur mit der
+ * hier ueblichen Laenge.
+ */
+function sauberName(roh, ersatz) {
+  const s = String(roh ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  let kurz = '';
+  for (const z of [...ZEICHEN.segment(s)].slice(0, 16)) {
+    if (kurz.length + z.segment.length > 64) break;
+    kurz += z.segment;
+  }
+  return kurz || ersatz;
+}
+
+/**
+ * Ausweise fuer die dauerhafte Spieler-Id.
+ *
+ * Die `pid` kommt vom Client und wird ueber `hello` behauptet - sie ist die
+ * Identitaet, an der `resume()` den alten Platz wiederfindet. Sie steht aber
+ * zugleich in jedem Tischzustand bei **allen** Mitspielern drin. Wer nur die
+ * pid prueft, laesst deshalb jeden am Tisch die Identitaet eines anderen
+ * uebernehmen und sich auf dessen Platz setzen.
+ *
+ * Also wie in gemeinsam/raum.js: die pid bleibt oeffentlich, dazu kommt ein
+ * geheimer Ausweis, den nur der Eigentuemer bekommt. Wer eine pid ohne
+ * passenden Ausweis behauptet, bekommt eine neue Id statt des fremden Platzes.
+ */
+const ausweise = new Map();   // pid -> { token, zuletzt }
+
+function ausweisen(pid, token) {
+  const gewuenscht = /^[a-z0-9_-]{6,40}$/i.test(String(pid ?? '')) ? String(pid) : null;
+  const bekannt = gewuenscht ? ausweise.get(gewuenscht) : null;
+  const frisch = () => {
+    const id = crypto.randomUUID();
+    const eintrag = { token: crypto.randomUUID(), zuletzt: Date.now() };
+    ausweise.set(id, eintrag);
+    return { id, token: eintrag.token };
+  };
+  if (!gewuenscht) return frisch();
+  if (bekannt && bekannt.token !== String(token ?? '')) return frisch();
+  const eintrag = bekannt ?? { token: crypto.randomUUID(), zuletzt: 0 };
+  eintrag.zuletzt = Date.now();
+  ausweise.set(gewuenscht, eintrag);
+  return { id: gewuenscht, token: eintrag.token };
+}
+
+// Ohne das waechst die Karte endlos - sie soll einen Nachmittag ueberdauern,
+// nicht die Laufzeit des Dienstes.
+setInterval(() => {
+  const grenze = Date.now() - 12 * 60 * 60 * 1000;
+  for (const [pid, e] of ausweise) if (e.zuletzt < grenze) ausweise.delete(pid);
+}, 60 * 60 * 1000);
+
 function route(client, msg) {
   switch (msg.t) {
     case 'hello': {
-      client.name = String(msg.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 16) || `Gast${client.conn}`;
-      client.id = /^[a-z0-9_-]{6,40}$/i.test(String(msg.pid ?? '')) ? msg.pid : crypto.randomUUID();
-      R.send(client, 'hello', { id: client.id, name: client.name });
+      client.name = sauberName(msg.name, `Gast${client.conn}`);
+      const ausweis = ausweisen(msg.pid, msg.token);
+      client.id = ausweis.id;
+      client.token = ausweis.token;
+      R.send(client, 'hello', { id: client.id, name: client.name, token: client.token });
       // Reload mitten in der Partie? Dann direkt zurück an den Tisch.
       if (!R.resume(client)) R.renamed(client);
       break;
     }
     case 'rename':
-      client.name = String(msg.name ?? '').trim().slice(0, 16) || client.name;
-      R.send(client, 'hello', { id: client.id, name: client.name });
+      client.name = sauberName(msg.name, client.name);
+      R.send(client, 'hello', { id: client.id, name: client.name, token: client.token });
       R.renamed(client);
       break;
 

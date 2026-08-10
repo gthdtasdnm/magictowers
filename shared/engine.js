@@ -202,6 +202,15 @@ export function createRound(seed, round = 1, totalRounds = ROUNDS) {
 // ------------------------------------------------------------------- Regeln
 
 export function isOpen(st, i) {
+  // Der Index kommt aus einer Nachricht des Clients. Ohne diese Zeile griff
+  // `LAYOUT[i]` bei einem Wert ausserhalb des Bretts ins Leere und warf
+  // "Cannot read properties of undefined (reading 'covers')". Geworfen wurde
+  // damit bis in `route()` hinauf, wo der Fehler nur noch protokolliert wird:
+  // der Client bekam gar keine Antwort - auch kein `resync` -, und jede
+  // solche Nachricht schrieb einen Stacktrace ins Journal. Ein Feld, das es
+  // nicht gibt, ist kein Fehlerfall, sondern schlicht nicht offen.
+  // `miss()` prueft die Grenzen laengst; hier fehlte es.
+  if (!Number.isInteger(i) || i < 0 || i >= BOARD_SIZE) return false;
   if (st.taken[i]) return false;
   return LAYOUT[i].covers.every((c) => st.taken[c]);
 }
