@@ -573,7 +573,10 @@ h3.mt { margin-top: 22px; }
   display: flex; flex-direction: column; gap: 10px; align-items: center;
   animation: slam-in .4s cubic-bezier(.2,1.4,.4,1); }
 @keyframes slam-in { from { transform: scale(.86); opacity: 0; } }
-.done-icon { font-size: 46px; animation: bob 2.4s ease-in-out infinite; }
+/* Kein Dauer-Wackeln: das Emoji stand die ganze Wartezeit unter `bob` und ist
+   auf dem Handy als Zappeln aufgefallen. Einmal aufpoppen reicht. */
+.done-icon { font-size: 46px; animation: bob-in .5s cubic-bezier(.2,1.4,.4,1); }
+@keyframes bob-in { from { transform: translateY(-8px) scale(.8); opacity: 0; } }
 .done-score { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 2px; }
 .done-score .lbl { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
 .done-score b { font-size: clamp(28px, 7vw, 40px); font-weight: 900; color: var(--gold);

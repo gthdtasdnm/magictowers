@@ -516,18 +516,24 @@ $('#btn-keep').onclick = () => {
 
 net.on('risk', (m) => {
   if (!st) return;
-  st.risk.used = m.used ?? st.risk.used;
-  st.risk.done = !!m.done;
   if (m.stopped) {
+    st.risk.used = m.used ?? st.risk.used;
+    st.risk.done = !!m.done;
     $('#risk-text').textContent = 'Punkte gesichert.';
     renderDone();
     return;
   }
-  st.score = m.score;
-  if (m.won) st.risk.won++; else st.risk.lost++;
 
-  // Kurz die Münze drehen lassen, dann auflösen.
+  // Erst die Münze, dann das Ergebnis. Der neue Stand wird deshalb nicht hier
+  // übernommen, sondern unten: `st.score` hing sonst schon am neuen Wert,
+  // während die Münze noch drehte – und der `live`-Push, den der Server direkt
+  // hinterherschickt, ruft renderDone() auf und schrieb ihn sichtbar hin.
+  // Der Wurf war damit entschieden, bevor die Animation durch war.
   setTimeout(() => {
+    st.risk.used = m.used ?? st.risk.used;
+    st.risk.done = !!m.done;
+    st.score = m.score;
+    if (m.won) st.risk.won++; else st.risk.lost++;
     $('#risk-coin').classList.remove('spin');
     $('#risk-coin').textContent = m.won ? '🪙' : '💀';
     $('#risk-text').innerHTML = m.won
