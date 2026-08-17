@@ -57,7 +57,16 @@ function buildBoard(st) {
     w.style.zIndex = String(n.row + 1);
     faces[i] = E.isHidden(st, i);
     w.appendChild(cardEl(st.board[i], faces[i], E.isGold(st, i)));
-    w.addEventListener('click', () => onPlay(i));
+    // `pointerdown` statt `click`: auf dem Handy liegen zwischen Aufsetzen und
+    // `click` je nach Browser bis zu 300 ms, in denen er auf einen zweiten
+    // Tipp wartet (Doppeltipp-Zoom). Beim schnellen Legen ging so mancher
+    // Tipp verloren – Bugreport 13. `preventDefault` unterdrückt den
+    // nachlaufenden `click`, sonst zählte jeder Zug doppelt.
+    w.addEventListener('pointerdown', (ev) => {
+      if (ev.button != null && ev.button !== 0) return;   // rechte Maustaste
+      ev.preventDefault();
+      onPlay(i);
+    });
     elPeaks.appendChild(w);
     return w;
   });

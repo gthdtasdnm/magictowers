@@ -52,6 +52,7 @@
       <button class="btn ghost small" id="btn-lb-1">🏆 Bestenliste</button>
       <button class="btn ghost small" id="btn-rules-1">📖 Spielregeln</button>
     </div>
+    <p class="zurueckzeile"><a class="zurueck" href="/spiele/">← Alle Spiele</a></p>
   </div>
 </section>
 
@@ -73,6 +74,12 @@
     <h2 id="room-name">Tisch</h2>
     <p class="muted" id="room-sub">Warte auf Mitspieler …</p>
     <div class="seats" id="seats"></div>
+    <!-- Am Tisch den Namen ändern. Vorher ging das nur auf der Startseite,
+         also nur bevor man saß – Bugreport 11. -->
+    <label class="field" id="rename-field">
+      <span>Dein Name</span>
+      <input id="in-rename" maxlength="12" autocomplete="nickname" spellcheck="false">
+    </label>
     <label class="field" id="rounds-field">
       <span>Runden</span>
       <select id="in-rounds">

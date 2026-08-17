@@ -12,19 +12,80 @@ const fmt = (n) => Number(n || 0).toLocaleString('de-DE');
 
 // ─────────────────────────────────────────────────────────── Zustand
 
-// Identität hängt am Tab (sessionStorage): Reload und Verbindungsabbruch führen
-// zurück an den Tisch, zwei Tabs sind aber zwei Spieler. Der zuletzt benutzte
-// Name aus localStorage dient nur als Vorschlag für einen frischen Tab.
-// Gemeinsamer Namensschlüssel aller vier Spiele – wer bei einem seinen Namen
+// Gemeinsamer Namensschlüssel aller Spiele – wer bei einem seinen Namen
 // eintippt, findet ihn beim nächsten schon vor.
 const NAME_KEY = 'spiele_name';
 
+// ── Identität ─────────────────────────────────────────────────────────────
+//
+// Sie hing bis zum 17.08.2026 am Tab (`sessionStorage`). Reload und
+// Verbindungsabbruch führten damit zurück an den Tisch – das Schließen der
+// Seite aber nicht. Und genau das macht Safari auf dem Handy von sich aus:
+// wer zurückkam, war ein neuer Spieler, während sein alter Platz samt Punkten
+// am Tisch stehenblieb. Das war Bugreport 8.
+//
+// Jetzt liegt sie im `localStorage` und überlebt das Schließen. Damit zwei
+// Tabs desselben Geräts nicht um dieselbe Kennung streiten, hängt ein
+// Herzschlag daran: der Tab, dem sie gehört, frischt sie alle vier Sekunden
+// auf und schreibt seine Tabkennung dazu.
+//
+//   gleiche Tabkennung        → das sind wir selbst (Neuladen)
+//   fremd, Herzschlag frisch  → ein anderer Tab spielt gerade, Finger weg
+//   fremd, Herzschlag alt     → niemand da, Kennung übernehmen
+//
+// Zwei Tabs sind damit weiterhin zwei Spieler, solange beide offen sind.
+// Gleiche Regel wie in `gemeinsam/schale.js`.
+const KENNUNG_KEY = 'cc-kennung';
+const HERZ_MS = 4000;
+const HERZ_TOT = 12_000;
+// So lange hält der Server seine Ausweise (server/main.js). Danach ist eine
+// alte Kennung ohnehin wertlos.
+const KENNUNG_VERFALL = 12 * 60 * 60 * 1000;
+const TAB = (() => {
+  try {
+    const t = sessionStorage.getItem('spiele_tab') ||
+      (crypto.randomUUID?.() ?? String(Date.now()) + String(Math.random()).slice(2));
+    sessionStorage.setItem('spiele_tab', t);
+    return t;
+  } catch {
+    return 'tab';
+  }
+})();
+let herzUhr = null;
+
+function kennungLesen() {
+  try {
+    const k = JSON.parse(localStorage.getItem(KENNUNG_KEY) ?? 'null');
+    if (!k || !k.pid) return null;
+    const alter = Date.now() - (k.herz ?? 0);
+    if (alter > KENNUNG_VERFALL) { localStorage.removeItem(KENNUNG_KEY); return null; }
+    if (k.tab !== TAB && alter < HERZ_TOT) return null;
+    return k;
+  } catch {
+    return null;
+  }
+}
+
+function kennungHalten(pid, token) {
+  try {
+    clearInterval(herzUhr);
+    const schreibe = () => localStorage.setItem(
+      KENNUNG_KEY,
+      JSON.stringify({ pid, token, tab: TAB, herz: Date.now() }),
+    );
+    schreibe();
+    herzUhr = setInterval(schreibe, HERZ_MS);
+  } catch { /* Privatmodus – dann eben ohne Wiedereinstieg */ }
+}
+
+const kennung = kennungLesen();
+
 const me = {
-  id: sessionStorage.getItem('cc-pid') || '',
+  id: kennung?.pid || '',
   // Geheimer Ausweis zur pid. Die pid allein ist kein Nachweis - sie steht
   // bei allen Mitspielern im Tischzustand.
-  token: sessionStorage.getItem('cc-token') || '',
-  name: sessionStorage.getItem('cc-name') || localStorage.getItem(NAME_KEY) || '',
+  token: kennung?.token || '',
+  name: localStorage.getItem(NAME_KEY) || '',
 };
 
 let room = null;          // letzter Raum-Snapshot vom Server
@@ -69,7 +130,6 @@ function identify() {
   const name = $('#in-name').value.trim();
   if (!name) { $('#in-name').focus(); toast('Wie heißt du?'); return false; }
   me.name = name;
-  sessionStorage.setItem('cc-name', name);
   localStorage.setItem(NAME_KEY, name);
   unlockAudio();
   net.send('hello', { name, pid: me.id, token: me.token });
@@ -135,6 +195,20 @@ $('#btn-ready').onclick = () => {
   net.send('ready', { value: !p?.ready });
 };
 $('#btn-start').onclick = () => net.send('start');
+
+// Namen am Tisch ändern (Bugreport 11). Der Server kennt `rename` längst –
+// es fehlte nur die Stelle, an der man ihn eintippen kann, sobald man sitzt.
+function umbenennen() {
+  const name = $('#in-rename').value.trim();
+  if (!name || name === me.name) return;
+  me.name = name;
+  localStorage.setItem(NAME_KEY, name);
+  $('#in-name').value = name;
+  net.send('rename', { name });
+}
+$('#in-rename').onchange = umbenennen;
+$('#in-rename').onblur = umbenennen;
+$('#in-rename').onkeydown = (e) => { if (e.key === 'Enter') $('#in-rename').blur(); };
 $('#in-rounds').onchange = (e) => net.send('rounds', { value: Number(e.target.value) });
 
 $('#btn-copy').onclick = async () => {
@@ -179,6 +253,10 @@ function renderRoom() {
     }
     seats.appendChild(d);
   }
+
+  // Nicht mitten ins Tippen hineinschreiben.
+  const feld = $('#in-rename');
+  if (document.activeElement !== feld) feld.value = meP?.name ?? me.name;
 
   const ready = $('#btn-ready');
   ready.textContent = meP?.ready ? '✓ Bereit' : 'Bereit';
@@ -323,7 +401,12 @@ function afterMove(ev) {
 }
 
 B.bindPlay(tryPlay);
-$('#deck').onclick = tryDraw;
+// Wie die Karten: `pointerdown` statt `click`, siehe board.js (Bugreport 13).
+$('#deck').addEventListener('pointerdown', (ev) => {
+  if (ev.button != null && ev.button !== 0) return;
+  ev.preventDefault();
+  tryDraw();
+});
 
 document.addEventListener('keydown', (e) => {
   if (!$('#s-game').classList.contains('on')) return;
@@ -598,8 +681,8 @@ rules.onclick = (e) => { if (e.target === rules) rules.classList.remove('on'); }
 net.on('hello', (m) => {
   me.id = m.id;
   me.name = m.name;
-  sessionStorage.setItem('cc-pid', m.id);
-  if (m.token) { me.token = m.token; sessionStorage.setItem('cc-token', m.token); }
+  if (m.token) me.token = m.token;
+  kennungHalten(me.id, me.token);
 });
 
 net.on('open', () => {
