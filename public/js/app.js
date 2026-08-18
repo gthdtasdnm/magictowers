@@ -271,10 +271,13 @@ function renderRoom() {
   if ($('#in-rounds').value !== String(room.totalRounds)) $('#in-rounds').value = String(room.totalRounds);
 
   $('#room-sub').textContent = `${room.totalRounds} Runden · ${online.length}/${room.maxPlayers} am Tisch`;
+  // Der Solo-Zweig ist nur bei minPlayers === 1 erreichbar; wo zwei noetig
+  // sind, faengt die Zeile darueber den Fall schon ab.
   $('#start-hint').textContent = online.length < room.minPlayers
     ? `Mindestens ${room.minPlayers} Spieler – hol noch jemanden an den Tisch!`
-    : isHost ? (allReady ? 'Alle bereit. Hau rein!' : 'Warte, bis alle bereit sind.')
-      : 'Der Host startet, sobald alle bereit sind.';
+    : online.length === 1 && isHost ? 'Allein am Tisch – du kannst sofort starten.'
+      : isHost ? (allReady ? 'Alle bereit. Hau rein!' : 'Warte, bis alle bereit sind.')
+        : 'Der Host startet, sobald alle bereit sind.';
 }
 
 net.on('room', ({ room: r }) => {

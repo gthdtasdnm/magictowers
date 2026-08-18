@@ -8,7 +8,11 @@ const COUNTDOWN_MS = 3200;
 const GRACE_MS = 400;      // Puffer für Latenz am Rundenende
 const TICK_MS = 500;
 const MAX_PLAYERS = 4;
-const MIN_PLAYERS = 2;
+// Eins, nicht zwei: Card Chaos ist Ablegen auf Zeit, das geht auch allein
+// gegen die eigene Bestzeit. Die Lobby soll niemanden zwingen, erst jemanden
+// zu suchen. Der Client baut Knopf und Hinweis aus room.minPlayers, hier
+// steht die einzige Stelle.
+const MIN_PLAYERS = 1;
 /** So weit darf die vom Client gemeldete Zugzeit von der Serveruhr abweichen. */
 const TIME_SLACK_MS = 1500;
 
@@ -410,8 +414,8 @@ export function setRounds(client, n) {
 /**
  * Zwischen den Runden reicht es, dass alle Anwesenden bereit sind. Hier wird
  * bewusst nicht auf MIN_PLAYERS geprüft – wer als Einziger übrig bleibt, soll
- * die angefangene Partie zu Ende spielen und in die Bestenliste kommen. Zum
- * *Starten* braucht es weiterhin zwei (siehe hostStart).
+ * die angefangene Partie zu Ende spielen und in die Bestenliste kommen. Seit
+ * MIN_PLAYERS auf 1 steht, gilt dasselbe auch fürs *Starten* (siehe hostStart).
  */
 function checkAllReady(room) {
   const active = room.players.filter((p) => p.online);

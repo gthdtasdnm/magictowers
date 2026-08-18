@@ -1,6 +1,7 @@
 # 🃏 Card Chaos
 
-Ein schnelles Mehrspieler-Kartenspiel für 2–4 Leute. Drei Pyramiden, ein Timer,
+Ein schnelles Kartenspiel für 1–4 Leute (`MIN_PLAYERS = 1` seit dem
+18.08.2026 – allein läuft es gegen die eigene Bestzeit). Drei Pyramiden, ein Timer,
 zehn Runden – wer am schnellsten Ketten baut, gewinnt.
 
 Läuft komplett auf **Deno**, ohne eine einzige externe Abhängigkeit. Kein Build-Schritt,
