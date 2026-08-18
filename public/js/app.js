@@ -571,9 +571,9 @@ net.on('roundEnd', ({ round: r, totalRounds, results, standings }) => {
   show('s-round');
 });
 
-function resRow({ place, name, score, sub, id, delay = 0 }) {
+function resRow({ place, name, score, sub, id, mine = false, delay = 0 }) {
   const medal = ['🥇', '🥈', '🥉'][place - 1] ?? place;
-  return `<div class="res p${place}${id === me.id ? ' me' : ''}" style="animation-delay:${delay * 70}ms">
+  return `<div class="res p${place}${id === me.id || mine ? ' me' : ''}" style="animation-delay:${delay * 70}ms">
     <span class="pl">${medal}</span>
     <span class="nm">${esc(name)}<div class="sub">${esc(sub)}</div></span>
     <span class="sc">${fmt(score)}</span></div>`;
@@ -657,25 +657,92 @@ function confetti() {
 
 // ─────────────────────────────────────────────────────────── Bestenliste
 
-function openLB() { net.send('leaderboard'); show('s-lb'); }
-$('#btn-lb-1').onclick = openLB;
+// Die Rundenzahl entscheidet über die Punktzahl: zehn Runden bringen rund das
+// Dreifache von dreien. Deshalb hat jede ihre eigene Liste, und die Woche und
+// die Ewigkeit ebenso – sichtbar ist immer nur eine davon.
+const LB_KEY = 'cc-lb-wahl';
+const LB_RUNDEN = [3, 5, 10];
+
+let lbDaten = null;   // letzte Antwort des Servers, alle sechs Felder
+const lbWahl = { zeitraum: 'woche', runden: 10 };
+
+try {
+  const w = JSON.parse(localStorage.getItem(LB_KEY) ?? 'null');
+  if (w && LB_RUNDEN.includes(w.runden)) Object.assign(lbWahl, w);
+} catch { /* kaputter Eintrag: dann eben die Voreinstellung */ }
+
+function openLB() {
+  // Wer an einem Tisch über 5 Runden sitzt, will die 5er-Liste sehen – ohne
+  // erst zu klicken. Nur ein Startpunkt: umschalten geht jederzeit.
+  if (room && LB_RUNDEN.includes(room.totalRounds)) lbWahl.runden = room.totalRounds;
+  lbChips();
+  lbZeichnen();
+  net.send('leaderboard');
+  show('s-lb');
+}
+
+for (const b of ['#btn-lb-1', '#btn-lb-2', '#btn-lb-3']) $(b).onclick = openLB;
 $('#btn-lb-back').onclick = () => show(backScreen);
 
-net.on('leaderboard', ({ top, fame }) => {
-  $('#lb-fame').innerHTML = fame.length
-    ? fame.map((e, i) => resRow({
-      place: e.rank, name: e.name, score: e.best,
-      sub: `${e.wins} ${e.wins === 1 ? 'Sieg' : 'Siege'} aus ${e.games} ${e.games === 1 ? 'Partie' : 'Partien'} · Ø ${fmt(e.avg)}`,
-      id: null, delay: i,
-    })).join('')
-    : '<p class="muted">Noch nichts gespielt. Sei der Erste!</p>';
-  $('#lb-top').innerHTML = top.length
-    ? top.map((e, i) => resRow({
-      place: e.rank, name: e.name, score: e.score,
-      sub: `${new Date(e.at).toLocaleDateString('de-DE')} · Platz ${e.place}/${e.players} · Serie ${e.bestStreak}`,
-      id: null, delay: i,
-    })).join('')
-    : '<p class="muted">Noch keine Ergebnisse.</p>';
+function lbChips() {
+  for (const b of $$('#lb-zeitraum .seg')) b.classList.toggle('sel', b.dataset.v === lbWahl.zeitraum);
+  for (const b of $$('#lb-runden .seg')) b.classList.toggle('sel', Number(b.dataset.v) === lbWahl.runden);
+}
+
+for (const b of $$('#lb-zeitraum .seg')) {
+  b.onclick = () => { lbWahl.zeitraum = b.dataset.v; lbUmschalten(); };
+}
+for (const b of $$('#lb-runden .seg')) {
+  b.onclick = () => { lbWahl.runden = Number(b.dataset.v); lbUmschalten(); };
+}
+
+function lbUmschalten() {
+  localStorage.setItem(LB_KEY, JSON.stringify(lbWahl));
+  lbChips();
+  lbZeichnen();
+}
+
+// Immer Berliner Zeit, nie die des Geraets: die Woche beginnt am Montag um
+// Mitternacht in Berlin, und ein Datum daneben waere schlicht falsch.
+const lbTag = (at) =>
+  new Date(at).toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric', timeZone: 'Europe/Berlin' });
+
+function lbZeile(e, i) {
+  const wer = e.players === 1 ? 'solo' : `${e.players} Spieler`;
+  const mehr = e.laeufe > 1 ? ` · ${e.laeufe} Partien` : '';
+  return resRow({
+    place: e.rank,
+    name: e.name,
+    score: e.score,
+    sub: `${lbTag(e.at)} · Serie ${e.bestStreak} · ${wer}${mehr}`,
+    id: null,
+    mine: !!me.name && e.name.toLowerCase() === me.name.toLowerCase(),
+    delay: i,
+  });
+}
+
+function lbZeichnen() {
+  const liste = $('#lb-liste');
+  const fuss = $('#lb-fuss');
+  if (!lbDaten) { liste.innerHTML = '<p class="muted">Wird geladen …</p>'; fuss.textContent = ''; return; }
+
+  const zeilen = lbDaten.boards?.[lbWahl.runden]?.[lbWahl.zeitraum] ?? [];
+  liste.innerHTML = zeilen.length
+    ? zeilen.map(lbZeile).join('')
+    : `<p class="muted">${
+      lbWahl.zeitraum === 'woche'
+        ? `Diese Woche noch keine Partie über ${lbWahl.runden} Runden. Sei der Erste!`
+        : `Über ${lbWahl.runden} Runden hat noch niemand gespielt.`
+    }</p>`;
+
+  fuss.textContent = lbWahl.zeitraum === 'woche'
+    ? `Läuft seit Montag, ${lbTag(lbDaten.wochenStart)} – jede Woche von vorn.`
+    : 'Alles, was je gespielt wurde. Eine Zeile je Person: ihre beste Partie.';
+}
+
+net.on('leaderboard', (m) => {
+  lbDaten = m;
+  lbZeichnen();
 });
 
 // ─────────────────────────────────────────────────────────── Regeln

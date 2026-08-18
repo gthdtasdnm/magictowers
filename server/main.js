@@ -190,7 +190,7 @@ function route(client, msg) {
     case 'risk': R.risk(client, !!msg.go); break;
 
     case 'leaderboard':
-      R.send(client, 'leaderboard', { top: LB.top(25), fame: LB.hallOfFame(25) });
+      R.send(client, 'leaderboard', LB.tafeln());
       break;
 
     case 'ping': R.send(client, 'pong', { c: msg.c, serverTime: Date.now() }); break;
@@ -220,7 +220,7 @@ Deno.serve({ port: PORT, hostname: HOST, onListen: ({ hostname, port }) => {
   }
 
   if (url.pathname === '/api/leaderboard') {
-    return Response.json({ top: LB.top(25), fame: LB.hallOfFame(25) });
+    return Response.json(LB.tafeln());
   }
 
   if (url.pathname === '/api/health') {

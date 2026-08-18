@@ -93,6 +93,9 @@
       <button class="btn primary big" id="btn-start">Spiel starten</button>
     </div>
     <p class="muted small" id="start-hint"></p>
+    <!-- Erst hiermit lohnt die Vorauswahl nach Rundenzahl: von der Startseite
+         aus weiss niemand, ueber wie viele Runden gleich gespielt wird. -->
+    <button class="btn ghost small" id="btn-lb-2">🏆 Bestenliste</button>
   </div>
 </section>
 
@@ -202,6 +205,7 @@
       <button class="btn primary big" id="btn-again">Nochmal!</button>
       <button class="btn big" id="btn-tolobby">Zur Lobby</button>
     </div>
+    <button class="btn ghost small" id="btn-lb-3">🏆 Bestenliste</button>
     <p class="muted small" id="end-hint"></p>
   </div>
 </section>
@@ -213,9 +217,18 @@
     <div class="spacer"></div>
     <h2 class="logo sm">BESTEN<span>LISTE</span></h2>
   </header>
-  <div class="lobby-grid">
-    <div class="panel"><h3>🥇 Ruhmeshalle</h3><div id="lb-fame" class="lb"></div></div>
-    <div class="panel"><h3>💥 Top-Ergebnisse</h3><div id="lb-top" class="lb"></div></div>
+  <div class="panel wide">
+    <div class="segmented" id="lb-zeitraum" role="group" aria-label="Zeitraum">
+      <button class="seg sel" data-v="woche">Diese Woche</button>
+      <button class="seg" data-v="ewig">Ewig</button>
+    </div>
+    <div class="segmented" id="lb-runden" role="group" aria-label="Rundenzahl">
+      <button class="seg" data-v="3">3 Runden</button>
+      <button class="seg" data-v="5">5 Runden</button>
+      <button class="seg sel" data-v="10">10 Runden</button>
+    </div>
+    <div id="lb-liste" class="lb"></div>
+    <p class="muted small" id="lb-fuss"></p>
   </div>
 </section>
 

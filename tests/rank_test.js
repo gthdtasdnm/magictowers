@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1';
-import { rank } from '../server/rooms.js';
+import { rank } from '../server/rang.js';
 
 Deno.test('Platzvergabe: gleicher Score, gleicher Platz', () => {
   const r = rank([{ score: 900 }, { score: 890 }, { score: 890 }, { score: 50 }]);

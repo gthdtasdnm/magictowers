@@ -3,6 +3,7 @@
 
 import * as E from '../shared/engine.js';
 import * as LB from './leaderboard.js';
+import { rank } from './rang.js';
 
 const COUNTDOWN_MS = 3200;
 const GRACE_MS = 400;      // Puffer für Latenz am Rundenende
@@ -126,14 +127,6 @@ function ensureHost(room) {
   // sobald jemand zurückkommt, greift diese Funktion erneut.
   const next = room.players.find((p) => p.online) ?? room.players[0];
   room.hostId = next ? next.id : null;
-}
-
-/** Plätze vergeben – gleicher Score heißt gleicher Platz. Liste muss sortiert sein. */
-export function rank(list, key = 'score') {
-  list.forEach((r, i) => {
-    r.place = i > 0 && list[i - 1][key] === r[key] ? list[i - 1].place : i + 1;
-  });
-  return list;
 }
 
 // ------------------------------------------------------------------- Lobby
@@ -406,7 +399,9 @@ export function setReady(client, value) {
 export function setRounds(client, n) {
   const room = client.room;
   if (!room || room.hostId !== client.id || room.phase !== 'lobby') return;
-  room.totalRounds = Math.min(20, Math.max(1, n | 0 || E.ROUNDS));
+  // Genau die drei Werte aus dem Menü – für andere gäbe es keine
+  // Bestenliste, und über die Leitung kommt nicht nur, was im Menü steht.
+  room.totalRounds = LB.RUNDEN.includes(n | 0) ? n | 0 : E.ROUNDS;
   syncRoom(room);
   pushLobby();
 }
@@ -579,7 +574,7 @@ function endRound(room, aborted = false) {
       .sort((a, b) => b.score - a.score));
     // Auch eine allein zu Ende gespielte Partie zählt – sonst verliert genau
     // der seinen Eintrag, dem die Mitspieler weggelaufen sind.
-    if (!aborted && final.length) LB.record(final, tableName(room));
+    if (!aborted && final.length) LB.record(final, tableName(room), room.totalRounds);
     broadcast(room, 'gameEnd', { results: final, aborted });
   } else {
     broadcast(room, 'roundEnd', { round: room.round, totalRounds: room.totalRounds, results, standings });

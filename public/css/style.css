@@ -634,6 +634,21 @@ h3.mt { margin-top: 22px; }
 .lb .res .pl { color: var(--muted); font-size: 15px; }
 .lb .res.p1 .pl, .lb .res.p2 .pl, .lb .res.p3 .pl { color: var(--gold); }
 
+/* Umschalter der Bestenliste: zwei Reihen, aber immer nur eine Liste darunter.
+   Sechs Felder nebeneinander waeren eine Wand, zwei Knopfreihen sind es nicht.
+   Es ist derselbe Schalter wie bei Oeffentlich|Privat - nur die Auswahl traegt
+   hier den Akzent, weil sie darueber entscheidet, was darunter steht. */
+#s-lb .segmented { width: 100%; }
+#s-lb .seg { font-size: 13px; padding: 10px 4px; }
+#s-lb .seg.sel {
+  color: #170221;
+  background: linear-gradient(100deg, var(--akzent), var(--akzent2));
+}
+/* Die Unterzeile darf umbrechen: „bester von 12 Partien" ist der halbe Grund,
+   warum eine Person nur eine Zeile bekommt - abgeschnitten nuetzt das nichts. */
+.lb .res .nm { white-space: normal; }
+.lb .res .sub { line-height: 1.35; }
+
 /* ── Modal / Toast ─────────────────────────────────────────────────────── */
 .modal { position: fixed; inset: 0; display: none; place-items: center; z-index: 50; padding: 18px;
   background: rgba(6, 3, 12, .8); backdrop-filter: blur(8px); overflow-y: auto; }

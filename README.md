@@ -121,6 +121,14 @@ spätestens wenn die Rundenzeit abgelaufen ist.
 und cleverer räumt. Sobald alle „Bereit" drücken, geht es weiter. Nach der letzten
 Runde gewinnt die höchste Gesamtpunktzahl, und das Ergebnis landet in der Bestenliste.
 
+Die **Bestenliste** ist nach Rundenzahl getrennt – 3, 5 und 10 Runden haben je eine
+eigene, weil zehn Runden rund das Dreifache einer Dreirundenpartie einbringen und
+eine kurze Partie in einem gemeinsamen Topf chancenlos wäre. Dazu kommt der
+Zeitraum: „Diese Woche" (ab Montag 00:00 Berliner Zeit) oder „Ewig". Sichtbar ist
+immer nur eines dieser sechs Felder; welches, wählen zwei Knopfreihen, und beim
+Öffnen steht die Rundenzahl vorne, die am eigenen Tisch eingestellt ist. Jede Person
+belegt genau **eine Zeile** – ihre beste Partie im gewählten Feld.
+
 ---
 
 ## Aufbau
@@ -130,6 +138,7 @@ shared/engine.js    Spiellogik – läuft identisch im Browser und auf dem Serve
 server/main.js      HTTP + WebSocket, statische Dateien
 server/rooms.js     Räume, Rundenablauf, Zugvalidierung
 server/leaderboard.js  Bestenliste als JSON-Datei
+server/rang.js      Plätze vergeben – von rooms.js und leaderboard.js genutzt
 public/             Frontend (Vanilla JS, keine Build-Tools)
 tests/              Engine-Tests
 ```
