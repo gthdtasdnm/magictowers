@@ -195,7 +195,7 @@ export function createRound(seed, round = 1, totalRounds = ROUNDS) {
     finished: null, // 'clear' | 'stuck' | null
   };
   // Erste Karte kommt gratis auf die Ablage, sonst könnte man nicht starten.
-  pushSlot(st, st.deck[st.deckPos++]);
+  resetSlots(st, st.deck[st.deckPos++]);
   return st;
 }
 
@@ -265,9 +265,14 @@ function slotsForStreak(streak) {
   return Math.min(MAX_SLOTS, n);
 }
 
-function pushSlot(st, card) {
-  st.slots.unshift(card);
-  st.slots.length = MAX_SLOTS;
+/**
+ * Ablage auf eine einzige Karte zusammenklappen – Rundenstart und Nachziehen.
+ * Die gesperrten Plätze werden dabei geleert, damit beim nächsten
+ * Freischalten keine uralte Karte wieder auftaucht.
+ */
+function resetSlots(st, card) {
+  st.slots = new Array(MAX_SLOTS).fill(null);
+  st.slots[0] = card;
 }
 
 // ------------------------------------------------------------- Bonusleiste
@@ -324,6 +329,7 @@ export function play(st, i, t = 0) {
   if (slot < 0) return null;
 
   const card = st.board[i];
+  const covered = st.slots[slot];   // die Karte, auf die gelegt wird
   st.taken[i] = true;
   st.cardsPlayed++;
   st.streak++;
@@ -363,7 +369,16 @@ export function play(st, i, t = 0) {
   st.unlocked = slotsForStreak(st.streak);
   if (st.unlocked > before) ev.unlocked = st.unlocked;
 
-  pushSlot(st, card);
+  // Die Karte deckt genau den Stapel zu, auf den sie passt – die anderen
+  // Ablagen bleiben unberührt liegen. Früher rutschte stattdessen alles einen
+  // Platz nach hinten, und die hinterste Karte fiel dabei heraus: wer bei
+  // 6-7-8 eine 5 auf die 6 legte, stand danach vor 5-6-7 und hatte die 8
+  // verloren, ohne sie angefasst zu haben (Bugreport 19).
+  st.slots[slot] = card;
+  // Ein gerade freigeschalteter Platz bekommt die eben zugedeckte Karte –
+  // sonst bliebe er leer und wäre nutzlos.
+  if (st.unlocked > before) st.slots[st.unlocked - 1] = covered;
+
   return settle(st, ev);
 }
 
@@ -395,7 +410,7 @@ export function draw(st, t = 0) {
   st.streak = 0;
   st.unlocked = BASE_SLOTS;
   drainBoost(st, t);   // Ziehen füttert die Leiste nicht, sie läuft weiter aus
-  pushSlot(st, card);
+  resetSlots(st, card);
   return settle(st, { type: 'draw', card, boost: st.boost, gain: 0 });
 }
 

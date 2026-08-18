@@ -378,7 +378,8 @@ h3.mt { margin-top: 22px; }
 .rival.done .rn { color: var(--good); }
 
 /* ── Pyramiden ─────────────────────────────────────────────────────────── */
-.table { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+.table { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: space-between;
   width: 100%; min-height: 0; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .peaks-wrap { position: relative; flex: 1; display: flex; align-items: center; justify-content: center;
   width: 100%; min-height: 0; }
@@ -523,15 +524,26 @@ h3.mt { margin-top: 22px; }
   25% { transform: translate(-50%, -18px) scale(1.2); opacity: 1; }
   100% { transform: translate(-50%, -70px) scale(1); opacity: 0; } }
 
-.banner { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 30; }
-.banner b { font-size: clamp(34px, 9vw, 84px); font-weight: 900; letter-spacing: -.03em;
+/* Die Jubelmeldungen saßen früher fix in der Bildschirmmitte – also genau
+   auf den Karten. Jetzt hängen sie oben am Tischrand, im freien Streifen
+   zwischen HUD und Pyramide (Bugreport 19). Mehrere gleichzeitige Meldungen
+   liegen weiterhin übereinander statt sich nach unten zu stapeln. */
+/* Unterkante genau an der Spitze der Pyramide: `.peaks` ist in `.peaks-wrap`
+   mittig, also liegt seine Oberkante 50 % minus halbe Bretthöhe. Die Meldung
+   wächst damit nach oben weg – in flachen Fenstern, wo über dem Brett keine
+   Luft ist, schiebt sie sich über das HUD statt über die Karten. */
+.banners { position: absolute; left: 0; right: 0; bottom: calc(50% + var(--card-h) * 1.175 + 6px);
+  display: grid; place-items: end center; pointer-events: none; z-index: 30; }
+.banner { grid-area: 1 / 1; display: grid; place-items: center; pointer-events: none; }
+.banner b { font-size: clamp(26px, 6vw, 54px); font-weight: 900; letter-spacing: -.03em;
+  text-align: center; white-space: nowrap;
   background: linear-gradient(100deg, var(--gold), var(--hot2), var(--hot));
   -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 6px 30px rgba(255, 138, 61, .6)); animation: slam .9s cubic-bezier(.2,1.6,.4,1) forwards; }
-@keyframes slam { 0% { transform: scale(2.6) rotate(-7deg); opacity: 0; }
+@keyframes slam { 0% { transform: scale(1.8) rotate(-7deg); opacity: 0; }
   22% { transform: scale(1) rotate(-2deg); opacity: 1; }
   75% { transform: scale(1) rotate(-2deg); opacity: 1; }
-  100% { transform: scale(.9) translateY(-24px); opacity: 0; } }
+  100% { transform: scale(.9) translateY(-20px); opacity: 0; } }
 
 .overlay { position: absolute; inset: 0; display: none; place-items: center; z-index: 20;
   background: rgba(10, 6, 18, .78); backdrop-filter: blur(6px); }
@@ -652,6 +664,9 @@ h3.mt { margin-top: 22px; }
 }
 /* Auf flachen Fenstern (Landscape-Handy) wird das Dock kompakter. */
 @media (max-height: 620px) {
+  /* Über der Pyramide bleibt hier kaum Luft – die Meldung wird kleiner,
+     statt wieder in die Karten zu rutschen. */
+  .banner b { font-size: clamp(20px, 5vw, 34px); }
   .dock { padding-bottom: 4px; gap: 10px; }
   .dock-lbl { display: none; }
   .boost-wrap { padding: 0 12px 2px; }

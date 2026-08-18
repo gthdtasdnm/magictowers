@@ -38,7 +38,7 @@ Daneben ein Nachziehstapel mit 16 Karten.
 |---|---|
 | Offene Feldkarte anklicken | Geht, wenn sie **genau ±1** zu einer offenen Ablagekarte ist (K–A–2 zählt rundherum) |
 | Nachziehen (Klick aufs Deck oder **Leertaste**) | Neue Karte in die Ablage – **Streak weg**, Ablage wieder auf eine Karte |
-| Karte gelegt | Sie wandert nach vorn in die Ablage, die älteren rutschen nach hinten |
+| Karte gelegt | Sie deckt **genau die Ablagekarte zu, auf die sie passt** – die anderen Ablagen bleiben unberührt liegen |
 
 Legbare Karten werden **nirgends hervorgehoben** – nicht durch Leuchten, nicht durch
 Mauszeiger oder Hover. Alle freien Karten sehen gleich aus; das Suchen gehört zum Spiel.
@@ -47,6 +47,11 @@ Mauszeiger oder Hover. Alle freien Karten sehen gleich aus; das Suchen gehört z
 ab Streak 5 erscheint eine der zuletzt gelegten Karten als zweite Ablage, ab Streak 10
 eine dritte. Vorher sind sie gar nicht sichtbar – sie fahren beim Freischalten rein.
 Ein Nachzug klappt alles wieder auf eine Karte zusammen. Mehr als drei gibt es nie.
+
+Jede offene Ablage ist ein **eigener Stapel**: Wer bei 6-7-8 die 5 auf die 6 legt, sieht
+danach 5-7-8 und nicht 5-6-7. Früher rutschte stattdessen alles einen Platz nach hinten,
+und die hinterste Karte fiel dabei heraus, ohne dass man sie angefasst hatte – der Grund,
+warum die zweite und dritte Ablage sich nicht wie ein Gewinn anfühlten (Bugreport 19).
 
 **Bonusleiste.** Sie läuft dauernd aus und füllt sich, wenn du Karte auf Karte legst.
 Volle Leiste heißt **doppelte Punkte**. Nachziehen lädt sie nicht auf.

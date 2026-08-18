@@ -8,6 +8,7 @@ const $ = (s) => document.querySelector(s);
 const elPeaks = $('#peaks');
 const elFx = $('#fx');
 const elSlots = $('#slots');
+const elBanners = $('#banners');
 const elDeck = $('#deck');
 const elDeckCount = $('#deck-count');
 const elStreak = $('#streak');
@@ -148,7 +149,7 @@ export function renderLive(st, t) {
   renderBoost(st, t);
 }
 
-let prevTop = null;
+let prevSlots = [];
 let prevUnlocked = 0;
 
 /** Nur die freigeschalteten Ablagen zeigen – die anderen gibt es noch nicht. */
@@ -161,12 +162,15 @@ function renderSlots(st) {
     const wrap = document.createElement('div');
     wrap.className = `slot-card s${s}` + (s > 0 ? ' dim' : '');
     wrap.appendChild(cardEl(card));
-    if (s === 0 && card !== prevTop) wrap.classList.add('fresh');
     // Gerade durch eine Kombi dazugekommen? Dann fährt sie sichtbar rein.
-    if (s > 0 && s >= prevUnlocked) wrap.classList.add('reveal');
+    if (s >= prevUnlocked) wrap.classList.add('reveal');
+    // Sonst hüpft genau der Stapel, auf dem die neue Karte gelandet ist – seit
+    // die Karte den getroffenen Stapel zudeckt, ist das nicht mehr immer der
+    // vorderste (Bugreport 19).
+    else if (card !== prevSlots[s]) wrap.classList.add('fresh');
     elSlots.appendChild(wrap);
   }
-  prevTop = st.slots[0];
+  prevSlots = st.slots.slice();
   prevUnlocked = st.unlocked;
 }
 
@@ -181,7 +185,7 @@ function renderBoost(st, t) {
 
 export function resetView() {
   built = false;
-  prevTop = null;
+  prevSlots = [];
   prevUnlocked = 0;
   shownScore = 0;
   targetScore = 0;
@@ -216,11 +220,16 @@ export function popAt(index, text, color) {
   setTimeout(() => p.remove(), 1000);
 }
 
+/**
+ * Jubelmeldung. Sie hängt oben am Rand des Spieltischs, nicht mehr in der
+ * Bildschirmmitte: dort lag sie genau über den Karten und verdeckte während
+ * eines guten Laufs das, worauf man gerade klicken wollte (Bugreport 19).
+ */
 export function banner(text) {
   const b = document.createElement('div');
   b.className = 'banner';
   b.innerHTML = `<b>${text}</b>`;
-  document.body.appendChild(b);
+  (elBanners ?? document.body).appendChild(b);
   setTimeout(() => b.remove(), 950);
 }
 

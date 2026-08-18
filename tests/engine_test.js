@@ -53,21 +53,51 @@ Deno.test('Deterministisch: gleicher Seed, gleiches Blatt', () => {
   assert(JSON.stringify(a.board) !== JSON.stringify(c.board));
 });
 
-Deno.test('Legen: Karte weg, Ablage rutscht, Streak und Punkte steigen', () => {
+Deno.test('Legen: Karte weg, Ablage zugedeckt, Streak und Punkte steigen', () => {
   const st = E.createRound('play-1');
   st.gold = [];   // Goldkarten würden den Wert verzehnfachen
   // Passende Basiskarte zur Ablage bauen statt suchen.
   const top = st.slots[0];
   st.board[18] = ((E.rankOf(top) + 1) % 13) + 13; // eine Herz-Karte, Rang +1
-  const before = st.slots[0];
 
   const ev = E.play(st, 18, 1000);
   assert(ev, 'Zug muss zulässig sein');
   assertEquals(st.taken[18], true);
   assertEquals(st.streak, 1);
   assertEquals(st.score, E.SCORE.perCard, 'ohne Multiplikatoren der glatte Grundwert');
-  assertEquals(st.slots[0], st.board[18], 'gelegte Karte liegt oben');
-  assertEquals(st.slots[1], before, 'alte Karte rutscht einen Slot nach hinten');
+  assertEquals(ev.slot, 0);
+  assertEquals(st.slots[0], st.board[18], 'gelegte Karte deckt die alte zu');
+  assertEquals(st.slots.slice(1).filter((c) => c != null).length, 0,
+    'die gesperrten Plätze bleiben leer');
+});
+
+// Bugreport 19: Bei drei offenen Ablagen rutschte früher alles einen Platz
+// nach hinten, sobald man legte – die hinterste Karte fiel dabei heraus,
+// obwohl man sie gar nicht angefasst hatte. Aus 6-7-8 wurde beim Legen der 5
+// auf die 6 ein 5-6-7 statt eines 5-7-8.
+Deno.test('Gelegte Karte deckt genau ihren Stapel zu, die anderen bleiben liegen', () => {
+  const st = E.createRound('slot-swap');
+  st.streak = 10;    // hoch genug, damit alle drei Ablagen offen bleiben
+  st.unlocked = 3;
+  // Drei Ablagen mit klar auseinanderliegenden Rängen: 6, 8 und 10.
+  const [six, eight, ten] = [5, 7, 9];
+  st.slots = [six, eight + 13, ten + 26];
+  // Eine 5 passt ausschließlich auf die 6 – zur 8 und zur 10 ist sie zu weit.
+  st.board[18] = 4 + 39;
+  assertEquals(E.matchingSlot(st, 18), 0);
+
+  assert(E.play(st, 18, 1000));
+  assertEquals(st.slots[0], 4 + 39, 'die 5 liegt jetzt auf dem ersten Stapel');
+  assertEquals(st.slots[1], eight + 13, 'die 8 liegt unverändert da');
+  assertEquals(st.slots[2], ten + 26, 'und die 10 fällt nicht mehr heraus');
+
+  // Dasselbe auf dem hintersten Stapel: ein Bube passt nur auf die 10.
+  st.board[19] = 10 + 13;
+  assertEquals(E.matchingSlot(st, 19), 2);
+  assert(E.play(st, 19, 2000));
+  assertEquals(st.slots[0], 4 + 39, 'der erste Stapel bleibt liegen');
+  assertEquals(st.slots[1], eight + 13, 'der zweite auch');
+  assertEquals(st.slots[2], 10 + 13, 'nur der getroffene Stapel wechselt');
 });
 
 Deno.test('Verdeckte Karten sind gesperrt, werden aber frei', () => {
@@ -141,12 +171,10 @@ Deno.test('Eine starke Kombi reiht weitere Ablagekarten auf', () => {
 
 Deno.test('Ältere Ablagekarten bleiben legbar, solange der Slot offen ist', () => {
   const st = E.createRound('match-1');
-  const a = st.slots[0];
-  // Zwei Karten legen, danach auf die inzwischen älteste Karte matchen.
-  st.board[18] = ((E.rankOf(a) + 1) % 13) + 13;
-  E.play(st, 18);
-  st.board[19] = ((E.rankOf(st.slots[0]) + 1) % 13) + 26;
-  E.play(st, 19);
+  // Drei Ablagen von Hand belegen – gelegt wird nur noch auf den passenden.
+  st.streak = 10;
+  st.unlocked = 3;
+  st.slots = [0, 4 + 13, 8 + 26];   // A, 5, 9
 
   // Einen Rang suchen, der ausschließlich zur dritten Ablagekarte passt.
   const only2 = [...Array(13).keys()].find((r) =>
